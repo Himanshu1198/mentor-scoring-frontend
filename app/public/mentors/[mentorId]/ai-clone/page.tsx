@@ -94,17 +94,21 @@ export default function MentorAIClonePage() {
         audioRef.current.src = url;
         audioRef.current.load();
         
-        // Use onloadedmetadata to ensure audio is ready before playing
-        const playAudio = () => {
-          audioRef.current?.play().catch(err => {
-            console.error('Failed to play audio:', err);
-            setIsPlaying(false);
-          });
-          setIsPlaying(true);
-          audioRef.current?.removeEventListener('loadedmetadata', playAudio);
-        };
+        // Use Promise-based approach to handle play() correctly
+        const playPromise = audioRef.current.play();
         
-        audioRef.current.addEventListener('loadedmetadata', playAudio);
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              // Playback started successfully
+              setIsPlaying(true);
+            })
+            .catch((error) => {
+              // Playback failed
+              console.error('Failed to auto-play audio:', error);
+              setIsPlaying(false);
+            });
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Failed to generate audio');
@@ -118,13 +122,25 @@ export default function MentorAIClonePage() {
     if (!audioRef.current) return;
     
     if (isPlaying) {
+      // Pause the audio
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      audioRef.current.play().catch(err => {
-        console.error('Failed to play audio:', err);
-      });
-      setIsPlaying(true);
+      // Play the audio using Promise-based approach
+      const playPromise = audioRef.current.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            // Playback started successfully
+            setIsPlaying(true);
+          })
+          .catch((error) => {
+            // Playback failed
+            console.error('Failed to play audio:', error);
+            setIsPlaying(false);
+          });
+      }
     }
   };
 
