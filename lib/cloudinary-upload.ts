@@ -4,7 +4,7 @@
  */
 
 const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dtzkpiqqu';
-const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'mentor_videos';
+const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '';
 
 interface CloudinaryUploadResponse {
   public_id: string;
@@ -38,7 +38,11 @@ export async function uploadVideoToCloudinary(
     // Create FormData for upload
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    
+    // Only add upload_preset if it's configured (leave blank if not needed)
+    if (CLOUDINARY_UPLOAD_PRESET) {
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    }
     
     // Add metadata as public_id for organization
     const publicId = `mentor_videos/${mentorId}/${sessionId}`;
