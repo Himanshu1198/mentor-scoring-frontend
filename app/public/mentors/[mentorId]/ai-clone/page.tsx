@@ -26,6 +26,7 @@ export default function MentorAIClonePage() {
   const [error, setError] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
 
   const { user, logout } = useAuth();
 
@@ -86,15 +87,19 @@ export default function MentorAIClonePage() {
       // Create a URL for the audio blob
       const url = URL.createObjectURL(audioBlob);
       setAudioUrl(url);
-      setIsPlaying(true);
+      setAudioBlob(audioBlob);
       
-      // Auto-play the audio
+      // Set audio source and auto-play after a small delay to ensure it's ready
       if (audioRef.current) {
         audioRef.current.src = url;
-        audioRef.current.play().catch(err => {
-          console.error('Failed to play audio:', err);
-          setIsPlaying(false);
-        });
+        // Use a timeout to ensure the audio element is ready before playing
+        setTimeout(() => {
+          audioRef.current?.play().catch(err => {
+            console.error('Failed to play audio:', err);
+            setIsPlaying(false);
+          });
+          setIsPlaying(true);
+        }, 100);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to generate audio');
@@ -109,13 +114,31 @@ export default function MentorAIClonePage() {
     
     if (isPlaying) {
       audioRef.current.pause();
+      setIsPlaying(false);
     } else {
       audioRef.current.play().catch(err => {
         console.error('Failed to play audio:', err);
-        setIsPlaying(false);
       });
+      setIsPlaying(true);
     }
-    setIsPlaying(!isPlaying);
+  };
+
+  const handleDownloadAudio = () => {
+    if (!audioBlob) return;
+
+    // Create a temporary URL for the blob
+    const url = URL.createObjectURL(audioBlob);
+    
+    // Create a temporary anchor element and click it
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mentor-audio-${Date.now()}.wav`;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Cleanup
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -224,9 +247,21 @@ export default function MentorAIClonePage() {
                       {isPlaying ? '⏸ Pause' : '▶ Play'}
                     </Button>
                     <Button 
+                      onClick={handleDownloadAudio}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      ⬇ Download
+                    </Button>
+                    <Button 
                       onClick={() => {
                         setAudioUrl(null);
+                        setAudioBlob(null);
                         setInputText('');
+                        if (audioRef.current) {
+                          audioRef.current.pause();
+                          audioRef.current.src = '';
+                        }
                       }}
                       variant="outline"
                       className="flex-1"
