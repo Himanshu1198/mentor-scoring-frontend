@@ -4,7 +4,7 @@
  */
 
 const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dtzkpiqqu';
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mentor-scoring-backend-1.onrender.com';
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://mentor-scoring-backend-1.onrender.com').replace(/\/$/, ''); // Remove trailing slash
 
 interface CloudinaryUploadResponse {
   public_id: string;
