@@ -104,10 +104,12 @@ function BreakdownContent() {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [selectedDip, setSelectedDip] = useState<ScoreEvent | null>(null);
-  const [isPlayingOriginal, setIsPlayingOriginal] = useState(false);
-  const [isPlayingImproved, setIsPlayingImproved] = useState(false);
   const [selectedSegment, setSelectedSegment] = useState<number | null>(null);
   const improvementSectionRef = useRef<HTMLDivElement>(null);
+  const audioRefsImprovement = useRef<{ [key: number]: HTMLAudioElement | null }>({});
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const [loadingAudio, setLoadingAudio] = useState<{ [key: number]: boolean }>({});
+  const [playingAudio, setPlayingAudio] = useState<number | null>(null);
 
   // Dummy data for AI Re-Delivery Demo
   const aiDeliverySegments: AIDeliverySegment[] = [
@@ -130,6 +132,140 @@ function BreakdownContent() {
       changes: ["More confident closing", "Inviting engagement", "Professional tone"]
     }
   ];
+
+  // Convert AudioBuffer to WAV format
+  const audioBufferToWav = (buffer: AudioBuffer): ArrayBuffer => {
+    const numberOfChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+
+    let length = buffer.length * numberOfChannels * 2;
+    let result = new ArrayBuffer(44 + length);
+    let view = new DataView(result);
+    let channels = [];
+    let offset = 0;
+    let pos = 0;
+
+    // Write WAV header
+    const setUint16 = (data: number) => {
+      view.setUint16(pos, data, true);
+      pos += 2;
+    };
+
+    const setUint32 = (data: number) => {
+      view.setUint32(pos, data, true);
+      pos += 4;
+    };
+
+    // RIFF identifier
+    setUint32(0x46464952);
+    // file length
+    setUint32(36 + length);
+    // RIFF type
+    setUint32(0x45564157);
+    // format chunk identifier
+    setUint32(0x20746d66);
+    // format chunk length
+    setUint32(16);
+    // sample format (raw)
+    setUint16(format);
+    // channel count
+    setUint16(numberOfChannels);
+    // sample rate
+    setUint32(sampleRate);
+    // byte rate (sample rate * block align)
+    setUint32(sampleRate * numberOfChannels * bitDepth / 8);
+    // block align (channel count * bytes per sample)
+    setUint16(numberOfChannels * bitDepth / 8);
+    // bits per sample
+    setUint16(bitDepth);
+    // data chunk identifier
+    setUint32(0x61746164);
+    // data chunk length
+    setUint32(length);
+
+    // Write audio data
+    for (let i = 0; i < buffer.numberOfChannels; i++) {
+      channels.push(buffer.getChannelData(i));
+    }
+
+    while (pos < result.byteLength) {
+      for (let i = 0; i < numberOfChannels; i++) {
+        let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+        sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        view.setInt16(pos, sample, true);
+        pos += 2;
+      }
+      offset++;
+    }
+
+    return result;
+  };
+
+  // Convert audio blob to playable format
+  const convertAudioToPlayableFormat = async (wavBlob: Blob): Promise<Blob> => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const audioContext = audioContextRef.current;
+
+      const arrayBuffer = await wavBlob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const wav = audioBufferToWav(audioBuffer);
+      return new Blob([wav], { type: 'audio/wav' });
+    } catch (error) {
+      console.error('Error converting audio:', error);
+      return wavBlob;
+    }
+  };
+
+  // Generate audio for improved text
+  const generateImprovedAudio = async (segmentIdx: number, text: string) => {
+    setLoadingAudio((prev) => ({ ...prev, [segmentIdx]: true }));
+
+    try {
+      const response = await fetch('https://ca979831caaa.ngrok-free.app/generate-audio', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({
+          name: 'striver',
+          text: text,
+          language: 'en',
+          temperature: 0.8,
+          repetition_penalty: 1.2,
+          cfg_weight: 0.5,
+          exaggeration: 0.5,
+          top_p: 1,
+          min_p: 0.05,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate audio (${response.status})`);
+      }
+
+      const rawBlob = await response.blob();
+      const convertedBlob = await convertAudioToPlayableFormat(rawBlob);
+      const audioUrl = URL.createObjectURL(convertedBlob);
+
+      if (audioRefsImprovement.current[segmentIdx]) {
+        audioRefsImprovement.current[segmentIdx]!.src = audioUrl;
+        audioRefsImprovement.current[segmentIdx]!.load();
+      }
+
+      setPlayingAudio(segmentIdx);
+      audioRefsImprovement.current[segmentIdx]?.play();
+    } catch (error) {
+      console.error('Error generating audio:', error);
+    } finally {
+      setLoadingAudio((prev) => ({ ...prev, [segmentIdx]: false }));
+    }
+  };
 
   // Dummy data for Skill Progress with AI Suggestions
   const skillProgress: SkillProgress[] = [
@@ -1089,7 +1225,7 @@ function BreakdownContent() {
             <CardHeader>
               <CardTitle>AI Re-Delivery Demo</CardTitle>
               <CardDescription>
-                Compare your original delivery with AI-improved versions. This is a voice clone demonstration (audio only, not video).
+                Compare your original delivery with AI-improved versions. Click "Play Improved" to hear the mentor AI voice clone deliver the improved version of each segment.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1119,58 +1255,62 @@ function BreakdownContent() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Original */}
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-semibold text-red-600 dark:text-red-400">
-                            Original Delivery
-                          </h4>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setIsPlayingOriginal(!isPlayingOriginal)}
-                            className="h-6 w-6 p-0"
-                          >
-                            {isPlayingOriginal ? (
-                              <Pause className="h-3 w-3" />
-                            ) : (
-                              <Play className="h-3 w-3" />
-                            )}
-                          </Button>
-                        </div>
+                        <h4 className="text-sm font-semibold text-red-600 dark:text-red-400">
+                          Original Delivery
+                        </h4>
                         <div className="bg-gray-100 dark:bg-gray-800 rounded p-3 min-h-[80px]">
                           <p className="text-sm text-muted-foreground italic">{segment.originalText}</p>
-                        </div>
-                        {/* Waveform placeholder */}
-                        <div className="h-16 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center">
-                          <span className="text-xs text-muted-foreground">Original Waveform</span>
                         </div>
                       </div>
 
                       {/* Improved */}
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-semibold text-green-600 dark:text-green-400">
-                            AI-Improved Delivery
-                          </h4>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setIsPlayingImproved(!isPlayingImproved)}
-                            className="h-6 w-6 p-0"
-                          >
-                            {isPlayingImproved ? (
-                              <Pause className="h-3 w-3" />
-                            ) : (
-                              <Play className="h-3 w-3" />
-                            )}
-                          </Button>
-                        </div>
+                        <h4 className="text-sm font-semibold text-green-600 dark:text-green-400">
+                          AI-Improved Delivery
+                        </h4>
                         <div className="bg-green-50 dark:bg-green-900/20 rounded p-3 min-h-[80px] border border-green-200 dark:border-green-800">
                           <p className="text-sm font-medium">{segment.improvedText}</p>
                         </div>
-                        {/* Waveform placeholder */}
-                        <div className="h-16 bg-green-200 dark:bg-green-800 rounded flex items-center justify-center">
-                          <span className="text-xs text-muted-foreground">Improved Waveform</span>
+                      </div>
+                    </div>
+
+                    {/* Audio Player */}
+                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                            Hear the AI-Improved Version
+                          </p>
+                          <audio
+                            ref={(el) => {
+                              audioRefsImprovement.current[idx] = el;
+                            }}
+                            className="w-full"
+                            onEnded={() => setPlayingAudio(null)}
+                          />
                         </div>
+                        <Button
+                          onClick={() => generateImprovedAudio(idx, segment.improvedText)}
+                          disabled={loadingAudio[idx]}
+                          className="flex items-center gap-2 whitespace-nowrap"
+                        >
+                          {loadingAudio[idx] ? (
+                            <>
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                              Generating...
+                            </>
+                          ) : playingAudio === idx ? (
+                            <>
+                              <Pause className="h-4 w-4" />
+                              Stop
+                            </>
+                          ) : (
+                            <>
+                              <Play className="h-4 w-4" />
+                              Play Improved
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </div>
 
