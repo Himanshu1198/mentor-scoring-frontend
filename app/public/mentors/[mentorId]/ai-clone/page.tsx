@@ -9,16 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
-interface AudioResponse {
-  audio: string;
-  duration: number;
-}
-
 export default function MentorAIClonePage() {
   const params = useParams();
   const router = useRouter();
   const mentorId = params.mentorId as string;
   const audioRef = useRef<HTMLAudioElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const [profileName, setProfileName] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
@@ -27,11 +23,11 @@ export default function MentorAIClonePage() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [converting, setConverting] = useState(false);
 
   const { user, logout } = useAuth();
 
   useEffect(() => {
-    // Fetch mentor profile to show name
     const fetchProfile = async () => {
       try {
         const res = await fetch(`https://mentor-scoring-backend-1.onrender.com/api/public/mentors/${mentorId}`);
@@ -46,6 +42,107 @@ export default function MentorAIClonePage() {
     fetchProfile();
   }, [mentorId]);
 
+  // Convert WAV to MP3-compatible format using Web Audio API
+  const convertAudioToPlayableFormat = async (wavBlob: Blob): Promise<Blob> => {
+    try {
+      setConverting(true);
+      
+      // Create audio context if not exists
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const audioContext = audioContextRef.current;
+
+      // Read the WAV file as array buffer
+      const arrayBuffer = await wavBlob.arrayBuffer();
+      
+      // Decode the audio data
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      
+      // Convert to WAV with proper headers
+      const wav = audioBufferToWav(audioBuffer);
+      const blob = new Blob([wav], { type: 'audio/wav' });
+      
+      return blob;
+    } catch (error) {
+      console.error('Error converting audio:', error);
+      // If conversion fails, return original blob
+      return wavBlob;
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  // Convert AudioBuffer to WAV format
+  const audioBufferToWav = (buffer: AudioBuffer): ArrayBuffer => {
+    const numberOfChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+
+    let length = buffer.length * numberOfChannels * 2;
+    let result = new ArrayBuffer(44 + length);
+    let view = new DataView(result);
+    let channels = [];
+    let offset = 0;
+    let pos = 0;
+
+    // Write WAV header
+    const setUint16 = (data: number) => {
+      view.setUint16(pos, data, true);
+      pos += 2;
+    };
+
+    const setUint32 = (data: number) => {
+      view.setUint32(pos, data, true);
+      pos += 4;
+    };
+
+    // RIFF identifier
+    setUint32(0x46464952);
+    // file length
+    setUint32(36 + length);
+    // RIFF type
+    setUint32(0x45564157);
+    // format chunk identifier
+    setUint32(0x20746d66);
+    // format chunk length
+    setUint32(16);
+    // sample format (raw)
+    setUint16(format);
+    // channel count
+    setUint16(numberOfChannels);
+    // sample rate
+    setUint32(sampleRate);
+    // byte rate (sample rate * block align)
+    setUint32(sampleRate * numberOfChannels * bitDepth / 8);
+    // block align (channel count * bytes per sample)
+    setUint16(numberOfChannels * bitDepth / 8);
+    // bits per sample
+    setUint16(bitDepth);
+    // data chunk identifier
+    setUint32(0x61746164);
+    // data chunk length
+    setUint32(length);
+
+    // Write audio data
+    for (let i = 0; i < buffer.numberOfChannels; i++) {
+      channels.push(buffer.getChannelData(i));
+    }
+
+    while (pos < result.byteLength) {
+      for (let i = 0; i < numberOfChannels; i++) {
+        let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+        sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        view.setInt16(pos, sample, true);
+        pos += 2;
+      }
+      offset++;
+    }
+
+    return result;
+  };
+
   const handleGenerateAudio = async () => {
     if (!inputText.trim()) {
       setError('Please enter some text');
@@ -55,6 +152,12 @@ export default function MentorAIClonePage() {
     setLoading(true);
     setError(null);
     setAudioUrl(null);
+    setIsPlaying(false);
+
+    // Cleanup previous audio URL
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+    }
 
     try {
       const response = await fetch('https://ca979831caaa.ngrok-free.app/generate-audio', {
@@ -81,36 +184,44 @@ export default function MentorAIClonePage() {
         throw new Error(errorData.error || `Failed to generate audio (${response.status})`);
       }
 
-      // Response should be a .wav audio file
-      const audioBlob = await response.blob();
-      
-      // Create a URL for the audio blob
-      const url = URL.createObjectURL(audioBlob);
+      // Get the audio blob
+      const rawBlob = await response.blob();
+      console.log('Received blob:', rawBlob.type, rawBlob.size);
+
+      // Convert the audio to a playable format
+      const convertedBlob = await convertAudioToPlayableFormat(rawBlob);
+      console.log('Converted blob:', convertedBlob.type, convertedBlob.size);
+
+      // Create URL
+      const url = URL.createObjectURL(convertedBlob);
+      setAudioBlob(convertedBlob);
       setAudioUrl(url);
-      setAudioBlob(audioBlob);
-      
-      // Set audio source and auto-play after element is ready
-      if (audioRef.current) {
-        audioRef.current.src = url;
-        audioRef.current.load();
-        
-        // Use Promise-based approach to handle play() correctly
-        const playPromise = audioRef.current.play();
-        
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              // Playback started successfully
-              setIsPlaying(true);
-            })
-            .catch((error) => {
-              // Playback failed
-              console.error('Failed to auto-play audio:', error);
-              setIsPlaying(false);
-            });
+
+      // Wait a bit for the DOM to update
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.src = url;
+          audioRef.current.load();
+          
+          // Wait for the audio to be ready
+          audioRef.current.onloadedmetadata = () => {
+            console.log('Audio loaded, duration:', audioRef.current?.duration);
+          };
+
+          audioRef.current.oncanplaythrough = () => {
+            console.log('Audio can play through');
+            // Don't autoplay - let user click play button
+          };
+
+          audioRef.current.onerror = (e) => {
+            console.error('Audio error:', e);
+            setError('Failed to load audio. Please try downloading instead.');
+          };
         }
-      }
+      }, 100);
+
     } catch (err: any) {
+      console.error('Generation error:', err);
       setError(err.message || 'Failed to generate audio');
       setIsPlaying(false);
     } finally {
@@ -122,23 +233,20 @@ export default function MentorAIClonePage() {
     if (!audioRef.current) return;
     
     if (isPlaying) {
-      // Pause the audio
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      // Play the audio using Promise-based approach
       const playPromise = audioRef.current.play();
       
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            // Playback started successfully
             setIsPlaying(true);
           })
           .catch((error) => {
-            // Playback failed
-            console.error('Failed to play audio:', error);
+            console.error('Playback error:', error);
             setIsPlaying(false);
+            setError('Cannot play audio. Please try downloading the file instead.');
           });
       }
     }
@@ -147,17 +255,12 @@ export default function MentorAIClonePage() {
   const handleDownloadAudio = () => {
     if (!audioBlob) return;
 
-    // Create a temporary URL for the blob
     const url = URL.createObjectURL(audioBlob);
-    
-    // Create a temporary anchor element and click it
     const a = document.createElement('a');
     a.href = url;
     a.download = `mentor-audio-${Date.now()}.wav`;
     document.body.appendChild(a);
     a.click();
-    
-    // Cleanup
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
@@ -170,12 +273,36 @@ export default function MentorAIClonePage() {
       setIsPlaying(false);
     };
 
+    const handlePlay = () => {
+      setIsPlaying(true);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
 
     return () => {
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
     };
   }, []);
+
+  // Cleanup URL when component unmounts
+  useEffect(() => {
+    return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, [audioUrl]);
 
   return (
     <ProtectedRoute allowedRoles={["student", "university"]}>
@@ -242,7 +369,16 @@ export default function MentorAIClonePage() {
             </Card>
           )}
 
-          {audioUrl && (
+          {(loading || converting) && (
+            <div className="text-center py-8">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+              <p className="mt-4 text-gray-600 dark:text-gray-400">
+                {converting ? 'Processing audio...' : 'Generating audio... Please wait.'}
+              </p>
+            </div>
+          )}
+
+          {audioUrl && !converting && (
             <Card className="border-green-200 dark:border-green-800">
               <CardHeader>
                 <CardTitle className="text-green-800 dark:text-green-200">✓ Audio Generated Successfully!</CardTitle>
@@ -253,6 +389,7 @@ export default function MentorAIClonePage() {
                     ref={audioRef}
                     className="w-full"
                     controls
+                    preload="auto"
                   />
                   
                   <div className="flex gap-2">
@@ -272,13 +409,18 @@ export default function MentorAIClonePage() {
                     </Button>
                     <Button 
                       onClick={() => {
-                        setAudioUrl(null);
-                        setAudioBlob(null);
-                        setInputText('');
                         if (audioRef.current) {
                           audioRef.current.pause();
                           audioRef.current.src = '';
                         }
+                        if (audioUrl) {
+                          URL.revokeObjectURL(audioUrl);
+                        }
+                        setAudioUrl(null);
+                        setAudioBlob(null);
+                        setInputText('');
+                        setIsPlaying(false);
+                        setError(null);
                       }}
                       variant="outline"
                       className="flex-1"
@@ -298,13 +440,6 @@ export default function MentorAIClonePage() {
                 </div>
               </CardContent>
             </Card>
-          )}
-
-          {loading && (
-            <div className="text-center py-8">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
-              <p className="mt-4 text-gray-600 dark:text-gray-400">Generating audio... Please wait.</p>
-            </div>
           )}
         </main>
       </div>
