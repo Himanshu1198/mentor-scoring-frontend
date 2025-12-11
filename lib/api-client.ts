@@ -9,6 +9,7 @@ class ApiClient {
 
   constructor() {
     this.baseURL = API_CONFIG.baseURL;
+    console.log(`🔗 API Client initialized with: ${this.baseURL}`);
   }
 
   private async request<T>(
@@ -17,6 +18,8 @@ class ApiClient {
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const timeout = options.timeout || API_CONFIG.timeout;
+
+    console.log(`📡 ${options.method || 'GET'} ${url}`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -35,6 +38,7 @@ class ApiClient {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error(`❌ API Error on ${endpoint}:`, errorData);
         throw new Error(
           errorData.error || `API Error: ${response.status} ${response.statusText}`
         );
@@ -46,6 +50,7 @@ class ApiClient {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error(`Request timeout after ${timeout}ms`);
       }
+      console.error(`❌ API Error on ${endpoint}:`, error);
       throw error;
     }
   }

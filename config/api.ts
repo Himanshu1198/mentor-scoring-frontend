@@ -1,5 +1,5 @@
 export const API_CONFIG = {
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://mentor-scoring-backend.onrender.com',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
