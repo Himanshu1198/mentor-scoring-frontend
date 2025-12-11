@@ -89,17 +89,22 @@ export default function MentorAIClonePage() {
       setAudioUrl(url);
       setAudioBlob(audioBlob);
       
-      // Set audio source and auto-play after a small delay to ensure it's ready
+      // Set audio source and auto-play after element is ready
       if (audioRef.current) {
         audioRef.current.src = url;
-        // Use a timeout to ensure the audio element is ready before playing
-        setTimeout(() => {
+        audioRef.current.load();
+        
+        // Use onloadedmetadata to ensure audio is ready before playing
+        const playAudio = () => {
           audioRef.current?.play().catch(err => {
             console.error('Failed to play audio:', err);
             setIsPlaying(false);
           });
           setIsPlaying(true);
-        }, 100);
+          audioRef.current?.removeEventListener('loadedmetadata', playAudio);
+        };
+        
+        audioRef.current.addEventListener('loadedmetadata', playAudio);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to generate audio');
@@ -145,18 +150,14 @@ export default function MentorAIClonePage() {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const handleEnded = () => setIsPlaying(false);
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => {
+      setIsPlaying(false);
+    };
 
     audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('play', handlePlay);
-    audio.addEventListener('pause', handlePause);
 
     return () => {
       audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('play', handlePlay);
-      audio.removeEventListener('pause', handlePause);
     };
   }, []);
 
