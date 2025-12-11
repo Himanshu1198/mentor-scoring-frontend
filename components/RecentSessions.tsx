@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import useEmblaCarousel from 'embla-carousel-react';
 import { apiClient } from '@/lib/api-client';
 import { API_ENDPOINTS } from '@/config/api';
+import { uploadVideoToCloudinary } from '@/lib/cloudinary-upload';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -201,33 +202,65 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
     setUploading(true);
 
     try {
-      const formData = new FormData();
+      const mentorId = user?.id || '1';
+      const sessionId = `session_${Date.now()}`;
+      const sessionName = createSessionName || (createMode === 'file' && createFile ? createFile.name.replace(/\.[^/.]+$/, '') : 'YouTube Session');
 
+      let videoUrl: string | null = null;
+
+      // Step 1: Upload video to Cloudinary first
       if (createMode === 'file') {
         if (!createFile) throw new Error('Please select a file to upload');
-        formData.append('file', createFile);
-        formData.append('sessionName', createSessionName || createFile.name.replace(/\.[^/.]+$/, ''));
+        
+        console.log('Uploading video to Cloudinary...');
+        const uploadResult = await uploadVideoToCloudinary(
+          createFile,
+          mentorId,
+          sessionId,
+          (progress) => console.log(`Upload progress: ${progress}%`)
+        );
+        videoUrl = uploadResult.secure_url;
+        console.log('Video uploaded to Cloudinary:', videoUrl);
       } else {
         if (!ytUrl) throw new Error('Please provide a YouTube URL');
-        formData.append('yt_url', ytUrl);
-        formData.append('sessionName', createSessionName || 'YouTube Session');
+        // For YouTube, we'll send the URL directly to the backend which will download and upload it
+        videoUrl = ytUrl;
       }
 
-      formData.append('context', createContext || '');
-      formData.append('userId', user?.id || '');
+      // Step 2: Send video URL and context to backend for analysis
+      const analysisPayload = {
+        videoUrl: videoUrl,
+        context: createContext || '',
+        sessionName: sessionName,
+        userId: user?.id || '',
+        uploadMode: createMode,
+      };
 
-      const mentorId = user?.id || '1';
+      console.log('Sending to backend for analysis:', analysisPayload);
 
-      const data = await apiClient.postForm<any>(
-        API_ENDPOINTS.mentor.upload(mentorId),
-        formData
+      const response = await fetch(
+        `https://mentor-scoring-backend-1.onrender.com/api/mentor/${mentorId}/sessions/analyze`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(analysisPayload),
+        }
       );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to analyze video (${response.status})`);
+      }
+
+      const data = await response.json();
 
       setSessionList(prev => [data.session, ...prev]);
       setIsAutoPlaying(false);
       setShowCreateForm(false);
 
-      // Redirect to breakdown (pendingAnalysis true so UI can wait for long-running jobs)
+      // Redirect to breakdown
       router.push(`/mentor/dashboard/breakdown/${data.session.id}`);
     } catch (error: any) {
       console.error(error);
