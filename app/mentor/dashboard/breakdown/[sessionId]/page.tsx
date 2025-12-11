@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiClient } from '@/lib/api-client';
+import { API_ENDPOINTS } from '@/config/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -204,15 +206,9 @@ function BreakdownContent() {
     setError(null);
 
     try {
-      const response = await fetch(
-        `http://localhost:5000/api/mentor/${mentorId}/sessions/${sessionId}/breakdown`
+      const data = await apiClient.get<any>(
+        API_ENDPOINTS.mentor.breakdown(mentorId, sessionId)
       );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch breakdown data');
-      }
-
-      const data = await response.json();
       
       // Normalize the data structure to ensure all required fields exist
       const normalizedData = {

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CheckCircle2, ArrowLeft, Sparkles, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiClient } from '@/lib/api-client';
+import { API_ENDPOINTS } from '@/config/api';
 
 interface MentorProfile {
   id: string;
@@ -41,9 +43,9 @@ export default function PublicMentorProfile() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`http://localhost:5000/api/public/mentors/${mentorId}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to load mentor profile');
+        const data = await apiClient.get<MentorProfile>(
+          API_ENDPOINTS.public.profile(mentorId)
+        );
         setProfile(data);
         // Check if logged-in user is the mentor owner
         if (user && user.role === 'mentor' && user.id === data.id) {

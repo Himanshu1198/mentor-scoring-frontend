@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiClient } from '@/lib/api-client';
+import { API_ENDPOINTS } from '@/config/api';
 import { Button } from '@/components/ui/button';
 import { MentorSnapshot } from '@/components/MentorSnapshot';
 import { SkillRadarChart } from '@/components/SkillRadarChart';
@@ -59,19 +61,15 @@ function MentorDashboardContent() {
 
     try {
       // Fetch all data in parallel
-      const [snapshotRes, skillsRes, sessionsRes] = await Promise.all([
-        fetch(`http://localhost:5000/api/mentor/${mentorId}/snapshot`),
-        fetch(`http://localhost:5000/api/mentor/${mentorId}/skills`),
-        fetch(`http://localhost:5000/api/mentor/${mentorId}/sessions`),
+      const [snapshotData, skillsData, sessionsData] = await Promise.all([
+        apiClient.get<any>(API_ENDPOINTS.mentor.snapshot(mentorId)),
+        apiClient.get<any>(API_ENDPOINTS.mentor.skills(mentorId)),
+        apiClient.get<any>(API_ENDPOINTS.mentor.sessions(mentorId)),
       ]);
 
-      if (!snapshotRes.ok || !skillsRes.ok || !sessionsRes.ok) {
-        throw new Error('Failed to fetch dashboard data');
-      }
-
-      const snapshotData = await snapshotRes.json();
-      const skillsData = await skillsRes.json();
-      const sessionsData = await sessionsRes.json();
+      setSnapshot(snapshotData);
+      setSkills(skillsData.skills || []);
+      setSessions(sessionsData.sessions || []);
 
       setSnapshot(snapshotData);
       setSkills(skillsData.skills || []);

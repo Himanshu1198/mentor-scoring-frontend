@@ -4,6 +4,8 @@ import { useEffect, useCallback, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import useEmblaCarousel from 'embla-carousel-react';
+import { apiClient } from '@/lib/api-client';
+import { API_ENDPOINTS } from '@/config/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -216,15 +218,10 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
 
       const mentorId = user?.id || '1';
 
-      const response = await fetch(`http://localhost:5000/api/mentor/${mentorId}/sessions/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Upload failed');
-      }
+      const data = await apiClient.postForm<any>(
+        API_ENDPOINTS.mentor.upload(mentorId),
+        formData
+      );
 
       setSessionList(prev => [data.session, ...prev]);
       setIsAutoPlaying(false);

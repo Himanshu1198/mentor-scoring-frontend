@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/select';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiClient } from '@/lib/api-client';
+import { API_ENDPOINTS } from '@/config/api';
 import { CheckCircle2, Sparkles, Trophy, RefreshCcw, BarChart3 } from 'lucide-react';
 
 interface RankingRow {
@@ -68,9 +70,9 @@ export default function PublicMentorDashboard() {
       if (experience && experience !== 'all') params.append('experience', experience);
       if (timeWindow && timeWindow !== 'all') params.append('window', timeWindow);
 
-      const res = await fetch(`http://localhost:5000/api/public/mentors/rankings?${params.toString()}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load rankings');
+      const data = await apiClient.get<any>(
+        `${API_ENDPOINTS.public.rankings}?${params.toString()}`
+      );
 
       setRankings(data.rankings || []);
       setFilters(data.filters || { subjects: [], languages: [], experienceLevels: [], timeWindows: [] });
