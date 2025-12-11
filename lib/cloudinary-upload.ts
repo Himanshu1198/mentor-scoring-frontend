@@ -1,10 +1,10 @@
 /**
  * Cloudinary Upload Utility
- * Handles video uploads to Cloudinary with proper metadata
+ * Handles video uploads to Cloudinary with backend-signed authentication
  */
 
 const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dtzkpiqqu';
-const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mentor-scoring-backend-1.onrender.com';
 
 interface CloudinaryUploadResponse {
   public_id: string;
@@ -18,6 +18,44 @@ interface CloudinaryUploadResponse {
   error?: {
     message: string;
   };
+}
+
+interface SignatureResponse {
+  signature: string;
+  timestamp: number;
+  api_key: string;
+}
+
+/**
+ * Get upload signature from backend
+ * The backend signs the upload using the API secret (which stays private)
+ */
+async function getUploadSignature(
+  mentorId: string,
+  sessionId: string
+): Promise<SignatureResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/cloudinary/signature`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        mentorId,
+        sessionId,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to get upload signature');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error getting upload signature:', error);
+    throw error;
+  }
 }
 
 /**
@@ -35,26 +73,31 @@ export async function uploadVideoToCloudinary(
   onProgress?: (progress: number) => void
 ): Promise<CloudinaryUploadResponse> {
   try {
-    // Create FormData for upload
+    // Step 1: Get upload signature from backend
+    console.log('Getting upload signature from backend...');
+    const { signature, timestamp, api_key } = await getUploadSignature(mentorId, sessionId);
+
+    // Step 2: Create FormData for signed upload
     const formData = new FormData();
     formData.append('file', file);
     
-    // Only add upload_preset if it's configured (leave blank if not needed)
-    if (CLOUDINARY_UPLOAD_PRESET) {
-      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    }
-    
-    // Add metadata as public_id for organization
+    // Signed upload parameters
     const publicId = `mentor_videos/${mentorId}/${sessionId}`;
     formData.append('public_id', publicId);
     formData.append('folder', 'mentor_videos');
     formData.append('overwrite', 'true');
     formData.append('invalidate', 'true');
     formData.append('tags', `mentor,session,${mentorId}`);
+    
+    // Signature parameters
+    formData.append('api_key', api_key);
+    formData.append('timestamp', timestamp.toString());
+    formData.append('signature', signature);
 
-    // Upload to Cloudinary
+    // Step 3: Upload to Cloudinary
+    console.log('Uploading video to Cloudinary...');
     const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`,
       {
         method: 'POST',
         body: formData,
@@ -68,6 +111,7 @@ export async function uploadVideoToCloudinary(
 
     const data: CloudinaryUploadResponse = await response.json();
 
+    console.log('Video uploaded successfully:', data.public_id);
     return {
       public_id: data.public_id,
       secure_url: data.secure_url,
@@ -90,9 +134,7 @@ export async function uploadVideoToCloudinary(
  */
 export async function deleteVideoFromCloudinary(publicId: string): Promise<void> {
   try {
-    // Note: Client-side deletion requires an API endpoint on your backend
-    // as we don't want to expose the API secret on the client
-    const response = await fetch('/api/cloudinary/delete', {
+    const response = await fetch(`${API_BASE_URL}/api/cloudinary/delete`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
