@@ -33,7 +33,7 @@ export default function MentorAIClonePage() {
     // Fetch mentor profile to show name
     const fetchProfile = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/public/mentors/${mentorId}`);
+        const res = await fetch(`https://mentor-scoring-backend-1.onrender.com/api/public/mentors/${mentorId}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to load mentor profile');
         setProfileName(data.name || null);
@@ -60,6 +60,7 @@ export default function MentorAIClonePage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
         },
         body: JSON.stringify({
           name: 'striver',
