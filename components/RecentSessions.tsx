@@ -338,9 +338,9 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
               <Button variant="outline" size="sm" onClick={handleResetFilters}>
                 Reset
               </Button>
-              <Button size="sm" onClick={handleCreateSessionClick} disabled={uploading}>
+              {/* <Button size="sm" onClick={handleCreateSessionClick} disabled={uploading}>
                 {showCreateForm ? 'Close' : (uploading ? 'Uploading...' : 'Create New Session')}
-              </Button>
+              </Button> */}
 
               {showCreateForm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
