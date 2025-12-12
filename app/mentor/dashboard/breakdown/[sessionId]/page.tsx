@@ -226,7 +226,7 @@ function BreakdownContent() {
     setLoadingAudio((prev) => ({ ...prev, [segmentIdx]: true }));
 
     try {
-      const response = await fetch('https://ca979831caaa.ngrok-free.app/generate-audio', {
+      const response = await fetch('https://1dbdcc822b89.ngrok-free.app/generate-audio', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
