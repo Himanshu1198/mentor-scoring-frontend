@@ -160,7 +160,7 @@ export default function MentorAIClonePage() {
     }
 
     try {
-      const response = await fetch('https://24f42279dc46.ngrok-free.app/generate-audio', {
+      const response = await fetch('https://4edda0f11a7e.ngrok-free.app/generate-audio', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
