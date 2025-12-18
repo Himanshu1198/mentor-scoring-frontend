@@ -764,7 +764,13 @@ function BreakdownContent() {
                   src={breakdown.videoUrl}
                   className="w-full h-auto max-h-full object-contain"
                   preload="metadata"
-                />
+                  crossOrigin="anonymous"
+                  controls={false}
+                  playsInline
+                >
+                  <source src={breakdown.videoUrl} type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
               </div>
 
               {/* Video Controls */}
