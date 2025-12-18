@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { AUDIO_GENERATION_URL, API_BASE_URL, API_ENDPOINTS } from '@/config/api';
 
 export default function MentorAIClonePage() {
   const params = useParams();
@@ -30,7 +31,7 @@ export default function MentorAIClonePage() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch(`https://mentor-scoring-backend-1.onrender.com/api/public/mentors/${mentorId}`);
+        const res = await fetch(`${API_BASE_URL}${API_ENDPOINTS.public.profile(mentorId)}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to load mentor profile');
         setProfileName(data.name || null);
@@ -160,7 +161,7 @@ export default function MentorAIClonePage() {
     }
 
     try {
-      const response = await fetch('https://ca979831caaa.ngrok-free.app/generate-audio', {
+      const response = await fetch(AUDIO_GENERATION_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

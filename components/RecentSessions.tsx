@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import useEmblaCarousel from 'embla-carousel-react';
 import { apiClient } from '@/lib/api-client';
-import { API_ENDPOINTS } from '@/config/api';
+import { API_ENDPOINTS, API_BASE_URL } from '@/config/api';
 import { uploadVideoToCloudinary } from '@/lib/cloudinary-upload';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -239,7 +239,7 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
       console.log('Sending to backend for analysis:', analysisPayload);
 
       const response = await fetch(
-        `https://mentor-scoring-backend-1.onrender.com/api/mentor/${mentorId}/sessions/analyze`,
+        `${API_BASE_URL}${API_ENDPOINTS.mentor.analyzeSession(mentorId)}`,
         {
           method: 'POST',
           headers: {

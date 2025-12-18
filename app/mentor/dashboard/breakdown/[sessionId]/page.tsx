@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiClient } from '@/lib/api-client';
-import { API_ENDPOINTS } from '@/config/api';
+import { API_ENDPOINTS, AUDIO_GENERATION_URL } from '@/config/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -226,7 +226,7 @@ function BreakdownContent() {
     setLoadingAudio((prev) => ({ ...prev, [segmentIdx]: true }));
 
     try {
-      const response = await fetch('https://ca979831caaa.ngrok-free.app/generate-audio', {
+      const response = await fetch(AUDIO_GENERATION_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -345,12 +345,26 @@ function BreakdownContent() {
       const data = await apiClient.get<any>(
         API_ENDPOINTS.mentor.breakdown(mentorId, sessionId)
       );
+      console.log(data);
+      
+      // If videoUrl is missing, fetch it from the video endpoint
+      let videoUrl = data.videoUrl || '';
+      if (!videoUrl) {
+        try {
+          const videoData = await apiClient.get<any>(
+            API_ENDPOINTS.mentor.video(mentorId, sessionId)
+          );
+          videoUrl = videoData.videoUrl || videoData.url || '';
+        } catch (videoErr) {
+          console.warn('Could not fetch video URL separately:', videoErr);
+        }
+      }
       
       // Normalize the data structure to ensure all required fields exist
       const normalizedData = {
         sessionId: data.sessionId || sessionId,
         sessionName: data.sessionName || `Session ${sessionId}`,
-        videoUrl: data.videoUrl || '',
+        videoUrl: videoUrl,
         duration: data.duration || 0,
         timeline: data.timeline || {
           audio: [],
@@ -361,6 +375,7 @@ function BreakdownContent() {
         },
         metrics: data.metrics || [],
       };
+      // console.log(normalizedData);
       
       setBreakdown(normalizedData);
       setDuration(normalizedData.duration);
