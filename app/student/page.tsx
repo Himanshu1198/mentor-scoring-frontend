@@ -47,7 +47,7 @@ export default function StudentProfilePage() {
   useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
-      
+
       // Use fallback data for now - endpoint doesn't exist yet
       setProfile({
         id: user?.id || "",
@@ -61,23 +61,29 @@ export default function StudentProfilePage() {
             id: "1",
             type: "watched",
             description: "Watched Calculus Fundamentals - Part 1",
-            date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0],
           },
           {
             id: "2",
             type: "session",
             description: "Completed session with Dr. Sarah Johnson",
-            date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0],
           },
           {
             id: "3",
             type: "watched",
             description: "Watched Quantum Physics Basics",
-            date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0],
           },
         ],
       });
-      
+
       setLoading(false);
     };
 

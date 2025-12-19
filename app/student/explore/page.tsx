@@ -139,7 +139,7 @@ export default function ExplorePage() {
         const data = await apiClient.get<{ rankings?: Mentor[] }>(
           API_ENDPOINTS.public.rankings
         );
-        
+
         // Extract unique subjects and languages from mentors
         const mentorsList = data.rankings || [];
         setMentors(mentorsList);
@@ -173,7 +173,8 @@ export default function ExplorePage() {
 
   const filteredContent = useMemo(() => {
     const searchTerm = search.toLowerCase();
-    let content: (Mentor | VideoContent)[] = contentType === "mentors" ? mentors : videos;
+    let content: (Mentor | VideoContent)[] =
+      contentType === "mentors" ? mentors : videos;
 
     // Apply search filter
     content = content.filter((item: Mentor | VideoContent) => {
@@ -520,9 +521,11 @@ export default function ExplorePage() {
                           </span>
                         </div>
                       </div>
-                      <Button 
-                        onClick={() => router.push(`/public/mentors/${mentor.id}`)}
-                        className="w-full gap-2" 
+                      <Button
+                        onClick={() =>
+                          router.push(`/public/mentors/${mentor.id}`)
+                        }
+                        className="w-full gap-2"
                         size="sm"
                       >
                         <Play className="h-4 w-4" />

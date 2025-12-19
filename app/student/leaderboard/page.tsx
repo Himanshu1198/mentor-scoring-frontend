@@ -70,7 +70,7 @@ export default function StudentLeaderboardPage() {
         );
 
         const rankingsList = data.rankings || [];
-        
+
         // Add rank numbers if not present
         const rankedData = rankingsList.map((item, index) => ({
           ...item,
@@ -87,7 +87,9 @@ export default function StudentLeaderboardPage() {
           new Set(rankingsList.map((m) => (m as any).language).filter(Boolean))
         ) as string[];
         const uniqueExperience = Array.from(
-          new Set(rankingsList.map((m) => (m as any).experience).filter(Boolean))
+          new Set(
+            rankingsList.map((m) => (m as any).experience).filter(Boolean)
+          )
         ) as string[];
 
         setFilters({
