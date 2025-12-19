@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -65,70 +66,10 @@ interface ExploreFilters {
 type ContentType = "mentors" | "videos";
 
 export default function ExplorePage() {
-  const { user } = useAuth();
-  const [contentType, setContentType] = useState<ContentType>("mentors");
-  const [mentors, setMentors] = useState<Mentor[]>([]);
-  const [videos, setVideos] = useState<VideoContent[]>([]);
-  const [filters, setFilters] = useState<ExploreFilters>({
-    subjects: [],
-    languages: [],
-    experienceLevels: [],
-    contentTypes: [],
-  });
-  const [search, setSearch] = useState("");
-  const [selectedFilters, setSelectedFilters] = useState<{
-    subject?: string;
-    language?: string;
-    experience?: string;
-  }>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  useAuth();
+  const router = useRouter();
 
-  // Sample data - replace with API calls
-  const sampleMentors: Mentor[] = [
-    {
-      id: "1",
-      name: "Dr. Sarah Johnson",
-      verified: true,
-      overallScore: 4.8,
-      strengthTag: "Mathematics Expert",
-      subject: "Mathematics",
-      language: "English",
-      experience: "Advanced",
-    },
-    {
-      id: "2",
-      name: "Prof. Michael Chen",
-      verified: true,
-      overallScore: 4.7,
-      strengthTag: "Physics Specialist",
-      subject: "Physics",
-      language: "English",
-      experience: "Advanced",
-    },
-    {
-      id: "3",
-      name: "Dr. Emma Williams",
-      verified: true,
-      overallScore: 4.6,
-      strengthTag: "Chemistry Expert",
-      subject: "Chemistry",
-      language: "English",
-      experience: "Intermediate",
-    },
-    {
-      id: "4",
-      name: "Prof. David Kumar",
-      verified: false,
-      overallScore: 4.5,
-      strengthTag: "Biology Enthusiast",
-      subject: "Biology",
-      language: "Hindi",
-      experience: "Intermediate",
-    },
-  ];
-
+  // Sample videos for now
   const sampleVideos: VideoContent[] = [
     {
       id: "1",
@@ -172,57 +113,70 @@ export default function ExplorePage() {
     },
   ];
 
-  useEffect(() => {
-    const fetchContent = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // For now, using sample data
-        // Replace with actual API calls when backend is ready
-        setMentors(sampleMentors);
-        setVideos(sampleVideos);
+  const [contentType, setContentType] = useState<ContentType>("mentors");
+  const [mentors, setMentors] = useState<Mentor[]>([]);
+  const [videos] = useState<VideoContent[]>(sampleVideos);
+  const [filters, setFilters] = useState<ExploreFilters>({
+    subjects: [],
+    languages: [],
+    experienceLevels: [],
+    contentTypes: ["mentors", "videos"],
+  });
+  const [search, setSearch] = useState("");
+  const [selectedFilters, setSelectedFilters] = useState<{
+    subject?: string;
+    language?: string;
+    experience?: string;
+  }>({});
+  const [loading, setLoading] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
 
-        // Extract unique filters from data
-        const uniqueSubjects = [
-          ...new Set(
-            [...sampleMentors, ...sampleVideos].map((item: any) => item.subject)
-          ),
-        ];
-        const uniqueLanguages = [
-          ...new Set(
-            [...sampleMentors, ...sampleVideos].map(
-              (item: any) => item.language
-            )
-          ),
-        ];
-        const uniqueExperience = [
-          ...new Set(sampleMentors.map((m) => m.experience)),
-        ];
+  // Fetch mentors from backend
+  useEffect(() => {
+    const fetchMentors = async () => {
+      try {
+        setLoading(true);
+        const data = await apiClient.get<{ rankings?: Mentor[] }>(
+          API_ENDPOINTS.public.rankings
+        );
+        
+        // Extract unique subjects and languages from mentors
+        const mentorsList = data.rankings || [];
+        setMentors(mentorsList);
+
+        // Extract unique filters from mentor data
+        const uniqueSubjects = Array.from(
+          new Set(mentorsList.map((m) => m.subject).filter(Boolean))
+        ) as string[];
+        const uniqueLanguages = Array.from(
+          new Set(mentorsList.map((m) => m.language).filter(Boolean))
+        ) as string[];
+        const uniqueExperience = Array.from(
+          new Set(mentorsList.map((m) => m.experience).filter(Boolean))
+        ) as string[];
 
         setFilters({
-          subjects: uniqueSubjects as string[],
-          languages: uniqueLanguages as string[],
+          subjects: uniqueSubjects,
+          languages: uniqueLanguages,
           experienceLevels: uniqueExperience,
           contentTypes: ["mentors", "videos"],
         });
-      } catch (err: any) {
-        setError(err.message || "Failed to load content");
+      } catch (err) {
+        console.error(err);
       } finally {
         setLoading(false);
       }
     };
 
-    if (user) {
-      fetchContent();
-    }
-  }, [user]);
+    fetchMentors();
+  }, []);
 
   const filteredContent = useMemo(() => {
     const searchTerm = search.toLowerCase();
-    let content = contentType === "mentors" ? mentors : videos;
+    let content: (Mentor | VideoContent)[] = contentType === "mentors" ? mentors : videos;
 
     // Apply search filter
-    content = content.filter((item) => {
+    content = content.filter((item: Mentor | VideoContent) => {
       const searchableText =
         contentType === "mentors"
           ? `${item.name} ${(item as Mentor).subject} ${
@@ -349,11 +303,11 @@ export default function ExplorePage() {
         {showFilters && (
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 p-6 rounded-lg border border-white/10 bg-white/5 backdrop-blur">
             <Select
-              value={selectedFilters.subject || ""}
+              value={selectedFilters.subject || "all"}
               onValueChange={(value) =>
                 setSelectedFilters({
                   ...selectedFilters,
-                  subject: value || undefined,
+                  subject: value === "all" ? undefined : value,
                 })
               }
             >
@@ -361,7 +315,7 @@ export default function ExplorePage() {
                 <SelectValue placeholder="Subject" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Subjects</SelectItem>
+                <SelectItem value="all">All Subjects</SelectItem>
                 {filters.subjects.map((subject) => (
                   <SelectItem key={subject} value={subject}>
                     {subject}
@@ -371,11 +325,11 @@ export default function ExplorePage() {
             </Select>
 
             <Select
-              value={selectedFilters.language || ""}
+              value={selectedFilters.language || "all"}
               onValueChange={(value) =>
                 setSelectedFilters({
                   ...selectedFilters,
-                  language: value || undefined,
+                  language: value === "all" ? undefined : value,
                 })
               }
             >
@@ -383,7 +337,7 @@ export default function ExplorePage() {
                 <SelectValue placeholder="Language" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Languages</SelectItem>
+                <SelectItem value="all">All Languages</SelectItem>
                 {filters.languages.map((language) => (
                   <SelectItem key={language} value={language}>
                     {language}
@@ -394,11 +348,11 @@ export default function ExplorePage() {
 
             {contentType === "mentors" && (
               <Select
-                value={selectedFilters.experience || ""}
+                value={selectedFilters.experience || "all"}
                 onValueChange={(value) =>
                   setSelectedFilters({
                     ...selectedFilters,
-                    experience: value || undefined,
+                    experience: value === "all" ? undefined : value,
                   })
                 }
               >
@@ -406,7 +360,7 @@ export default function ExplorePage() {
                   <SelectValue placeholder="Experience" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Levels</SelectItem>
+                  <SelectItem value="all">All Levels</SelectItem>
                   {filters.experienceLevels.map((level) => (
                     <SelectItem key={level} value={level}>
                       {level}
@@ -566,7 +520,11 @@ export default function ExplorePage() {
                           </span>
                         </div>
                       </div>
-                      <Button className="w-full gap-2" size="sm">
+                      <Button 
+                        onClick={() => router.push(`/public/mentors/${mentor.id}`)}
+                        className="w-full gap-2" 
+                        size="sm"
+                      >
                         <Play className="h-4 w-4" />
                         View Profile
                       </Button>

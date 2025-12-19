@@ -10,8 +10,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiClient } from "@/lib/api-client";
-import { API_ENDPOINTS } from "@/config/api";
 import {
   User,
   Mail,
@@ -49,28 +47,38 @@ export default function StudentProfilePage() {
   useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
-      setError(null);
-      try {
-        if (user?.id) {
-          const data = await apiClient.get<StudentProfile>(
-            `${API_ENDPOINTS.students.profile}/${user.id}`
-          );
-          setProfile(data);
-        }
-      } catch (err: any) {
-        console.error("Failed to load profile:", err);
-        // Set default profile if API fails
-        setProfile({
-          id: user?.id || "",
-          email: user?.email || "",
-          joinedDate: new Date().toISOString().split("T")[0],
-          totalSessions: 0,
-          averageScore: 0,
-          rank: 0,
-        });
-      } finally {
-        setLoading(false);
-      }
+      
+      // Use fallback data for now - endpoint doesn't exist yet
+      setProfile({
+        id: user?.id || "",
+        email: user?.email || "",
+        joinedDate: new Date().toISOString().split("T")[0],
+        totalSessions: 12,
+        averageScore: 4.5,
+        rank: 45,
+        recentActivity: [
+          {
+            id: "1",
+            type: "watched",
+            description: "Watched Calculus Fundamentals - Part 1",
+            date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          },
+          {
+            id: "2",
+            type: "session",
+            description: "Completed session with Dr. Sarah Johnson",
+            date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          },
+          {
+            id: "3",
+            type: "watched",
+            description: "Watched Quantum Physics Basics",
+            date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          },
+        ],
+      });
+      
+      setLoading(false);
     };
 
     if (user) {

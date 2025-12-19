@@ -42,13 +42,14 @@ interface Filters {
 
 export default function StudentLeaderboardPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  useAuth();
+
   const [rankings, setRankings] = useState<RankingRow[]>([]);
   const [filters, setFilters] = useState<Filters>({
     subjects: [],
     languages: [],
     experienceLevels: [],
-    timeWindows: [],
+    timeWindows: ["weekly", "monthly", "alltime"],
   });
   const [subject, setSubject] = useState<string | undefined>();
   const [language, setLanguage] = useState<string | undefined>();
@@ -58,42 +59,94 @@ export default function StudentLeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchRankings = async () => {
+  // Fetch rankings from backend
+  useEffect(() => {
+    const fetchRankings = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await apiClient.get<{ rankings?: RankingRow[] }>(
+          API_ENDPOINTS.public.rankings
+        );
+
+        const rankingsList = data.rankings || [];
+        
+        // Add rank numbers if not present
+        const rankedData = rankingsList.map((item, index) => ({
+          ...item,
+          rank: item.rank || index + 1,
+        }));
+
+        setRankings(rankedData);
+
+        // Extract unique filters from mentor data
+        const uniqueSubjects = Array.from(
+          new Set(rankingsList.map((m) => (m as any).subject).filter(Boolean))
+        ) as string[];
+        const uniqueLanguages = Array.from(
+          new Set(rankingsList.map((m) => (m as any).language).filter(Boolean))
+        ) as string[];
+        const uniqueExperience = Array.from(
+          new Set(rankingsList.map((m) => (m as any).experience).filter(Boolean))
+        ) as string[];
+
+        setFilters({
+          subjects: uniqueSubjects,
+          languages: uniqueLanguages,
+          experienceLevels: uniqueExperience,
+          timeWindows: ["weekly", "monthly", "alltime"],
+        });
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRankings();
+  }, []);
+
+  // Re-fetch when filters change
+  const handleRefresh = async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (subject && subject !== "all") params.append("subject", subject);
-      if (language && language !== "all") params.append("language", language);
-      if (experience && experience !== "all")
-        params.append("experience", experience);
-      if (timeWindow && timeWindow !== "all")
-        params.append("window", timeWindow);
-
-      const data = await apiClient.get<any>(
-        `${API_ENDPOINTS.public.rankings}?${params.toString()}`
+      const data = await apiClient.get<{ rankings?: RankingRow[] }>(
+        API_ENDPOINTS.public.rankings
       );
 
-      setRankings(data.rankings || []);
-      setFilters(
-        data.filters || {
-          subjects: [],
-          languages: [],
-          experienceLevels: [],
-          timeWindows: [],
-        }
-      );
-    } catch (err: any) {
-      setError(err.message || "Failed to load rankings");
+      let rankingsList = data.rankings || [];
+
+      // Apply filters to data on frontend
+      if (subject && subject !== "all") {
+        rankingsList = rankingsList.filter(
+          (m) => (m as any).subject === subject
+        );
+      }
+      if (language && language !== "all") {
+        rankingsList = rankingsList.filter(
+          (m) => (m as any).language === language
+        );
+      }
+      if (experience && experience !== "all") {
+        rankingsList = rankingsList.filter(
+          (m) => (m as any).experience === experience
+        );
+      }
+
+      // Add rank numbers if not present
+      const rankedData = rankingsList.map((item, index) => ({
+        ...item,
+        rank: item.rank || index + 1,
+      }));
+
+      setRankings(rankedData);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchRankings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subject, language, experience, timeWindow]);
 
   const filteredBySearch = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -144,7 +197,7 @@ export default function StudentLeaderboardPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="h-10 w-full sm:w-56 lg:w-64 bg-white/5 border-white/10 text-slate-50 placeholder:text-slate-400"
           />
-          <Select value={subject} onValueChange={setSubject}>
+          <Select value={subject || "all"} onValueChange={setSubject}>
             <SelectTrigger
               size="sm"
               className="w-[140px] bg-white/5 border-white/10 text-slate-50"
@@ -160,7 +213,7 @@ export default function StudentLeaderboardPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={language} onValueChange={setLanguage}>
+          <Select value={language || "all"} onValueChange={setLanguage}>
             <SelectTrigger
               size="sm"
               className="w-[140px] bg-white/5 border-white/10 text-slate-50"
@@ -176,7 +229,7 @@ export default function StudentLeaderboardPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={experience} onValueChange={setExperience}>
+          <Select value={experience || "all"} onValueChange={setExperience}>
             <SelectTrigger
               size="sm"
               className="w-[160px] bg-white/5 border-white/10 text-slate-50"
@@ -192,7 +245,7 @@ export default function StudentLeaderboardPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={timeWindow} onValueChange={setTimeWindow}>
+          <Select value={timeWindow || "weekly"} onValueChange={setTimeWindow}>
             <SelectTrigger
               size="sm"
               className="w-[130px] bg-white/5 border-white/10 text-slate-50"
@@ -211,7 +264,7 @@ export default function StudentLeaderboardPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={fetchRankings}
+            onClick={handleRefresh}
             disabled={loading}
             className="border-white/20 text-slate-50"
           >
