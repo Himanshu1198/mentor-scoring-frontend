@@ -27,6 +27,11 @@ export const API_ENDPOINTS = {
     video: (mentorId: string, sessionId: string) => `/api/mentor/${mentorId}/sessions/${sessionId}/video`,
     analyzeSession: (mentorId: string) => `/api/mentor/${mentorId}/sessions/analyze`,
   },
+  students: {
+    profile: '/api/students/profile',
+    sessions: '/api/students/sessions',
+    watchHistory: '/api/students/watch-history',
+  },
   audio: {
     get: (videoId: string) => `/api/audio/${videoId}`,
     create: '/api/audio/create',
