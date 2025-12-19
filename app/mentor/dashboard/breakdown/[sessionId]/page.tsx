@@ -433,19 +433,27 @@ Provide exactly 3 specific changes made.`,
       const data = await apiClient.get<any>(
         API_ENDPOINTS.mentor.breakdown(mentorId, sessionId)
       );
-      console.log(data);
+      console.log('Breakdown data:', data);
       
       // If videoUrl is missing, fetch it from the video endpoint
       let videoUrl = data.videoUrl || '';
       if (!videoUrl) {
         try {
+          console.log('Fetching video URL from endpoint...');
           const videoData = await apiClient.get<any>(
             API_ENDPOINTS.mentor.video(mentorId, sessionId)
           );
+          console.log('Video endpoint response:', videoData);
+          // The endpoint now returns JSON with videoUrl field
           videoUrl = videoData.videoUrl || videoData.url || '';
+          console.log('Extracted video URL:', videoUrl);
         } catch (videoErr) {
           console.warn('Could not fetch video URL separately:', videoErr);
         }
+      }
+      
+      if (!videoUrl) {
+        console.warn('No video URL found in breakdown or video endpoint');
       }
       
       // Normalize the data structure to ensure all required fields exist
@@ -464,7 +472,7 @@ Provide exactly 3 specific changes made.`,
         metrics: data.metrics || [],
         diarization: data.diarization || undefined,
       };
-      // console.log(normalizedData);
+      console.log('Normalized data with video URL:', normalizedData);
       
       setBreakdown(normalizedData);
       setDuration(normalizedData.duration);
@@ -475,6 +483,7 @@ Provide exactly 3 specific changes made.`,
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load breakdown data');
+      console.error('Error fetching breakdown data:', err);
     } finally {
       setLoading(false);
     }

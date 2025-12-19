@@ -6,7 +6,6 @@ import { useEffect, useState, useRef } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { API_ENDPOINTS, API_BASE_URL } from "@/config/api"
-import { uploadVideoToCloudinary } from "@/lib/cloudinary-upload"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +18,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import axios from "axios"
+
+// S3 Upload Service URL
+const S3_SERVICE_URL = 'http://localhost:3000/api'
 
 interface WeakMoment {
   timestamp: string
@@ -48,17 +51,18 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
   const [dateFilter, setDateFilter] = useState("all")
   const [studentFilter, setStudentFilter] = useState("all")
   const [uploading, setUploading] = useState(false)
-  const [sortBy, setSortBy] = useState("date") // "date", "score", "students"
+  const [processing, setProcessing] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadStatus, setUploadStatus] = useState("")
+  const [sortBy, setSortBy] = useState("date")
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return "N/A"
 
     try {
-      // Handle various date formats: ISO 8601, timestamps, etc.
       const date = new Date(dateString)
-
-      // Check if date is valid
       if (isNaN(date.getTime())) {
         return "N/A"
       }
@@ -127,7 +131,6 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
   const { user } = useAuth()
 
   useEffect(() => {
-    // Ensure each session has a valid date field
     const sessionsWithDefaults = sessions.map((session) => ({
       ...session,
       date: session.date || new Date().toISOString(),
@@ -156,86 +159,172 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
 
   const handleCreateSubmit = async (e?: React.FormEvent) => {
     if (e && typeof e.preventDefault === "function") e.preventDefault()
+    
     setUploading(true)
+    setUploadProgress(0)
+    setUploadStatus("")
 
     try {
       const mentorId = user?.id || "1"
-      const sessionId = `session_${Date.now()}`
       const sessionName =
         createSessionName ||
         (createMode === "file" && createFile ? createFile.name.replace(/\.[^/.]+$/, "") : "YouTube Session")
 
-      let videoUrl: string | null = null
+      let videoPlaybackUrl: string | null = null
+      let analysisResults: any = null
+      let videoId: string | null = null
 
-      // Step 1: Upload video to Cloudinary first
       if (createMode === "file") {
         if (!createFile) throw new Error("Please select a file to upload")
 
-        console.log("Uploading video to Cloudinary...")
-        const uploadResult = await uploadVideoToCloudinary(createFile, mentorId, sessionId, (progress) =>
-          console.log(`Upload progress: ${progress}%`),
-        )
-        videoUrl = uploadResult.secure_url
-        console.log("Video uploaded to Cloudinary:", videoUrl)
+        console.log("🎬 Starting S3 upload process...")
+
+        // Step 1: Initiate upload - get presigned URL
+        setUploadStatus("Getting upload URL...")
+        setUploadProgress(5)
+
+        const initiateResponse = await axios.post(`${S3_SERVICE_URL}/upload/initiate`, {
+          fileName: createFile.name,
+          fileSize: createFile.size,
+        })
+
+        const { videoId: newVideoId, uploadUrl } = initiateResponse.data
+        videoId = newVideoId
+        console.log(`🆔 Video ID: ${videoId}`)
+
+        // Step 2: Upload full video to S3
+        setUploadStatus("Uploading video to S3...")
+        console.log(`📤 Uploading ${(createFile.size / (1024 * 1024)).toFixed(2)} MB video...`)
+
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          body: createFile,
+          headers: {
+            "Content-Type": "video/mp4",
+          },
+        })
+
+        if (!uploadResponse.ok) {
+          throw new Error(`Upload failed with status ${uploadResponse.status}`)
+        }
+
+        console.log("✅ Video uploaded to S3")
+        setUploading(false)
+        setUploadProgress(25)
+
+        // Step 3: Process video (backend chunks with FFmpeg)
+        setProcessing(true)
+        setUploadStatus("Processing video with FFmpeg (chunking)...")
+        console.log("✂️  Backend is chunking video with FFmpeg...")
+
+        const processResponse = await axios.post(`${S3_SERVICE_URL}/upload/process`, {
+          videoId: videoId,
+        })
+
+        const { totalChunks } = processResponse.data
+        console.log(`✅ Video chunked into ${totalChunks} valid MP4 segments`)
+        setProcessing(false)
+        setUploadProgress(50)
+
+        // Step 4: Trigger analysis (S3 backend calls FastAPI)
+        setAnalyzing(true)
+        setUploadStatus(`Analyzing ${totalChunks} chunks...`)
+        console.log(`🚀 Backend sending ${totalChunks} chunk URLs to FastAPI...`)
+
+        const analyzeResponse = await axios.post(`${S3_SERVICE_URL}/upload/analyze`, {
+          videoId: videoId,
+        })
+
+        analysisResults = analyzeResponse.data.analysisResults
+        console.log("✅ Analysis completed")
+        console.log("📊 Analysis Results:", analysisResults)
+        setUploadProgress(80)
+
+        // Step 5: Get full video playback URL
+        setUploadStatus("Getting playback URL...")
+        const playbackResponse = await axios.get(`${S3_SERVICE_URL}/upload/playback/${videoId}`)
+        const { playbackUrl } = playbackResponse.data
+
+        videoPlaybackUrl = playbackUrl
+        console.log("🎬 Full Video Playback URL:", videoPlaybackUrl)
+
+        setAnalyzing(false)
+        setUploadStatus("Complete!")
+        setUploadProgress(100)
+
       } else {
+        // YouTube mode - handle separately if needed
         if (!ytUrl) throw new Error("Please provide a YouTube URL")
-        // For YouTube, we'll send the URL directly to the backend which will download and upload it
-        videoUrl = ytUrl
+        throw new Error("YouTube mode not yet implemented with S3")
       }
 
-      // Step 2: Send video URL and context to backend for analysis
-      const analysisPayload = {
-        videoUrl: videoUrl,
+      // Step 6: Create session in your database with the analysis results
+      console.log("💾 Creating session in MongoDB with analysis results...")
+      setUploadStatus("Saving to database...")
+      
+      const sessionPayload = {
+        videoUrl: videoPlaybackUrl,
+        videoId: videoId,
         context: createContext || "",
         sessionName: sessionName,
         userId: user?.id || "",
         uploadMode: createMode,
+        analysisResults: analysisResults, // Use results from S3 backend
       }
 
-      console.log("Sending to backend for analysis:", analysisPayload)
+      console.log("💾 Session Payload:", sessionPayload)
 
-      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.mentor.analyzeSession(mentorId)}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(analysisPayload),
-      })
+      // Send to backend endpoint to save to MongoDB
+      const BACKEND_API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000"
+      const dbResponse = await axios.post(
+        `${BACKEND_API_URL}/api/mentor/${mentorId}/sessions/create-from-analysis`,
+        sessionPayload,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      )
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Failed to analyze video (${response.status})`)
+      console.log("✅ Session saved to MongoDB:", dbResponse.data)
+
+      const savedSession = dbResponse.data.session
+      
+      // Create session object from database response
+      const newSession: Session = {
+        id: savedSession.id,
+        sessionName: savedSession.sessionName,
+        date: new Date(savedSession.date).toISOString(),
+        score: savedSession.score || 85,
+        weakMoments: analysisResults?.weakMoments || [],
+        studentCount: 1,
+        uploadedFile: videoPlaybackUrl || "",
       }
 
-      const data = await response.json()
+      console.log("✅ New session created:", newSession)
 
-      setSessionList((prev) => [data.session, ...prev])
+      setSessionList((prev) => [newSession, ...prev])
       setShowCreateForm(false)
-
-      // Redirect to breakdown
-      router.push(`/mentor/dashboard/breakdown/${data.session.id}`)
+      setUploadProgress(100)
+      
+      // Optional: Redirect to breakdown page
+      // const router = useRouter()
+      // router.push(`/mentor/dashboard/breakdown/${newSession.id}`)
     } catch (error: any) {
-      console.error(error)
+      console.error("❌ Error:", error)
       alert(error?.message || "Failed to create session")
     } finally {
       setUploading(false)
+      setProcessing(false)
+      setAnalyzing(false)
+      setUploadProgress(0)
+      setUploadStatus("")
       setCreateFile(null)
       setYtUrl("")
       setCreateContext("")
       setCreateSessionName("")
     }
   }
-
-  useEffect(() => {
-    // Ensure each session has a valid date field
-    const sessionsWithDefaults = sessions.map((session) => ({
-      ...session,
-      date: session.date || new Date().toISOString(),
-      studentCount: session.studentCount || 0,
-      score: session.score || 0,
-    }))
-    setSessionList(sessionsWithDefaults)
-  }, [sessions])
 
   const filteredSessions = sessionList.filter((session) => {
     const term = searchTerm.trim().toLowerCase()
@@ -320,13 +409,13 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
               <Button
                 size="sm"
                 onClick={handleCreateSessionClick}
-                disabled={uploading}
+                disabled={uploading || processing || analyzing}
                 className="gap-2 transition-smooth hover:scale-[1.02]"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                {showCreateForm ? "Close" : uploading ? "Uploading..." : "New Session"}
+                {showCreateForm ? "Close" : uploading || processing || analyzing ? "Processing..." : "New Session"}
               </Button>
 
               {showCreateForm && (
@@ -389,6 +478,11 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
                             onChange={handleFileInputChange}
                             className="w-full cursor-pointer"
                           />
+                          {createFile && (
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              Selected: {createFile.name} ({(createFile.size / (1024 * 1024)).toFixed(2)} MB)
+                            </p>
+                          )}
                         </div>
                       ) : (
                         <Input
@@ -414,6 +508,31 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
                         className="w-full h-28 p-3 border-2 border-input rounded-lg bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring transition-all"
                       />
 
+                      {/* Progress Bar */}
+                      {(uploading || processing || analyzing) && (
+                        <div className="space-y-2">
+                          <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                            <div
+                              className="h-full bg-primary transition-all duration-300"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                          <p className="text-sm text-muted-foreground text-center">
+                            {uploadStatus || `${uploadProgress}%`}
+                          </p>
+                          {processing && (
+                            <p className="text-xs text-muted-foreground text-center">
+                              ✂️  FFmpeg is chunking video into valid MP4 segments...
+                            </p>
+                          )}
+                          {analyzing && (
+                            <p className="text-xs text-muted-foreground text-center">
+                              🔍 Analyzing video chunks...
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       <div className="flex justify-end gap-3 mt-2">
                         <Button
                           type="button"
@@ -421,16 +540,23 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
                           variant="outline"
                           onClick={() => setShowCreateForm(false)}
                           className="transition-smooth hover:scale-105"
+                          disabled={uploading || processing || analyzing}
                         >
                           Cancel
                         </Button>
                         <Button
                           type="submit"
                           size="sm"
-                          disabled={uploading}
+                          disabled={uploading || processing || analyzing}
                           className="transition-smooth hover:scale-105"
                         >
-                          {uploading ? "Uploading..." : "Create Session"}
+                          {uploading
+                            ? "Uploading..."
+                            : processing
+                            ? "Processing..."
+                            : analyzing
+                            ? "Analyzing..."
+                            : "Create Session"}
                         </Button>
                       </div>
                     </form>
@@ -460,7 +586,6 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
 
         {filteredSessions.length > 0 && (
           <div className="space-y-3">
-            {/* Sort Options */}
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-border">
               <p className="text-sm font-medium text-foreground">
                 {filteredSessions.length} session{filteredSessions.length !== 1 ? "s" : ""} found
@@ -494,13 +619,11 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
               </DropdownMenu>
             </div>
 
-            {/* Sessions List */}
             {getSortedSessions(filteredSessions).map((session) => (
               <div key={session.id} className="animate-fade-in">
                 <Card className="border-2 card-hover group transition-all hover:shadow-md">
                   <CardContent className="p-4">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start">
-                      {/* Session Info */}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-bold text-foreground text-base sm:text-lg mb-2 line-clamp-2 group-hover:text-primary transition-colors">
                           {session.sessionName}
@@ -531,7 +654,6 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
                         </div>
                       </div>
 
-                      {/* Score and Button */}
                       <div className="flex items-center gap-4 sm:gap-6 self-end sm:self-start">
                         <div className="flex flex-col items-end">
                           <div className={`text-2xl sm:text-3xl font-bold ${getScoreColor(session.score)}`}>
