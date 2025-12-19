@@ -8,8 +8,10 @@ export type Role = 'student' | 'mentor' | 'university';
 
 interface User {
   id?: string;
+  name?: string;
   email: string;
   role: Role;
+  createdAt?: string;
 }
 
 interface AuthContextType {
@@ -46,8 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const userData: User = {
         id: data.id,  // MongoDB user ID from backend
+        name: data.name || data.email.split('@')[0],
         email: data.email || email,
         role: data.role || role,
+        createdAt: data.createdAt,
       };
 
       setUser(userData);

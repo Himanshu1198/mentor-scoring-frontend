@@ -9,7 +9,7 @@ import { API_ENDPOINTS, AUDIO_GENERATION_URL } from '@/config/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { ArrowLeft, Play, Pause, Volume2, VolumeX, Download, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Volume2, VolumeX, Download, TrendingUp, SkipBack, SkipForward, Maximize2, ChevronDown } from 'lucide-react';
 
 interface TimelineAudio {
   startTime: number;
@@ -80,6 +80,22 @@ interface BreakdownData {
     scorePeaks: ScoreEvent[];
   };
   metrics: Metric[];
+  diarization?: {
+    id: string;
+    sentences: Array<{
+      start: number;
+      end: number;
+      text: string;
+      duration: number;
+      needs_improvement: boolean;
+      improvement?: {
+        reason: string;
+        suggestion: string;
+      };
+    }>;
+    total_sentences: number;
+    sentences_needing_improvement: number;
+  };
 }
 
 function BreakdownContent() {
@@ -94,6 +110,8 @@ function BreakdownContent() {
   const [breakdown, setBreakdown] = useState<BreakdownData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [aiDeliverySegments, setAiDeliverySegments] = useState<AIDeliverySegment[]>([]);
+  const [generatingAiSegments, setGeneratingAiSegments] = useState(false);
 
   // Video player state
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -105,33 +123,12 @@ function BreakdownContent() {
   const [isMuted, setIsMuted] = useState(false);
   const [selectedDip, setSelectedDip] = useState<ScoreEvent | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<number | null>(null);
+  const [showTimelineHelp, setShowTimelineHelp] = useState(false);
   const improvementSectionRef = useRef<HTMLDivElement>(null);
   const audioRefsImprovement = useRef<{ [key: number]: HTMLAudioElement | null }>({});
   const audioContextRef = useRef<AudioContext | null>(null);
   const [loadingAudio, setLoadingAudio] = useState<{ [key: number]: boolean }>({});
   const [playingAudio, setPlayingAudio] = useState<number | null>(null);
-
-  // Dummy data for AI Re-Delivery Demo
-  const aiDeliverySegments: AIDeliverySegment[] = [
-    {
-      timestamp: 0,
-      originalText: "So, um, like, the thing about video processing is, you know, it's really complex and stuff.",
-      improvedText: "Video processing is a complex field that requires understanding multiple technical concepts.",
-      changes: ["Removed filler words (um, like, you know)", "More concise and professional", "Clearer structure"]
-    },
-    {
-      timestamp: 120,
-      originalText: "I mean, basically, the algorithm does this thing where it, like, processes frames really fast.",
-      improvedText: "The algorithm processes frames efficiently through optimized frame-by-frame analysis.",
-      changes: ["Removed vague language (basically, thing)", "Added technical precision", "Clearer explanation"]
-    },
-    {
-      timestamp: 240,
-      originalText: "So yeah, that's pretty much it. Any questions? I guess?",
-      improvedText: "To summarize, we've covered the key concepts. Are there any questions I can clarify?",
-      changes: ["More confident closing", "Inviting engagement", "Professional tone"]
-    }
-  ];
 
   // Convert AudioBuffer to WAV format
   const audioBufferToWav = (buffer: AudioBuffer): ArrayBuffer => {
@@ -218,6 +215,97 @@ function BreakdownContent() {
     } catch (error) {
       console.error('Error converting audio:', error);
       return wavBlob;
+    }
+  };
+
+  // Generate AI-improved delivery segments using Gemini API
+  const generateAiDeliverySegments = async (diarizationData: BreakdownData['diarization']) => {
+    if (!diarizationData || !diarizationData.sentences || diarizationData.sentences.length === 0) {
+      console.warn('No diarization data available for AI segment generation');
+      return;
+    }
+
+    setGeneratingAiSegments(true);
+    try {
+      // Select up to 3 segments from the diarization (spread throughout the session)
+      const totalSentences = diarizationData.sentences.length;
+      const indices = [
+        0,
+        Math.floor(totalSentences / 2),
+        Math.min(totalSentences - 1, Math.floor((totalSentences * 2) / 3))
+      ];
+
+      const selectedSentences = indices
+        .filter(i => i < totalSentences)
+        .map(i => diarizationData.sentences[i]);
+
+      const segments: AIDeliverySegment[] = [];
+
+      for (const sentence of selectedSentences) {
+        try {
+          const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + process.env.NEXT_PUBLIC_GEMINI_API_KEY, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: {
+                parts: [
+                  {
+                    text: `You are a professional speech coach. Improve the following sentence by:
+1. Removing filler words (um, like, you know, basically, etc.)
+2. Making it more professional and clear
+3. Improving clarity and conciseness
+
+Original sentence: "${sentence.text}"
+
+Respond in this exact JSON format (no markdown, just JSON):
+{
+  "improvedText": "improved version here",
+  "changes": ["change 1", "change 2", "change 3"]
+}
+
+Provide exactly 3 specific changes made.`,
+                  },
+                ],
+              },
+            }),
+          });
+
+          if (!response.ok) {
+            console.warn(`Failed to generate improvement for segment at ${sentence.start}s`);
+            continue;
+          }
+
+          const data = await response.json();
+          const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+          // Parse the JSON response
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) {
+            console.warn('Could not parse JSON from response');
+            continue;
+          }
+
+          const improvement = JSON.parse(jsonMatch[0]);
+
+          segments.push({
+            timestamp: Math.round(sentence.start),
+            originalText: sentence.text,
+            improvedText: improvement.improvedText || sentence.text,
+            changes: Array.isArray(improvement.changes) ? improvement.changes : ['Professional improvement', 'Clearer delivery', 'Enhanced clarity'],
+          });
+        } catch (err) {
+          console.warn(`Error generating improvement for segment at ${sentence.start}s:`, err);
+          // Continue with next sentence
+        }
+      }
+
+      setAiDeliverySegments(segments);
+    } catch (error) {
+      console.error('Error generating AI delivery segments:', error);
+    } finally {
+      setGeneratingAiSegments(false);
     }
   };
 
@@ -374,11 +462,17 @@ function BreakdownContent() {
           scorePeaks: [],
         },
         metrics: data.metrics || [],
+        diarization: data.diarization || undefined,
       };
       // console.log(normalizedData);
       
       setBreakdown(normalizedData);
       setDuration(normalizedData.duration);
+
+      // Generate AI-improved delivery segments if diarization data is available
+      if (normalizedData.diarization) {
+        await generateAiDeliverySegments(normalizedData.diarization);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load breakdown data');
     } finally {
@@ -751,92 +845,148 @@ function BreakdownContent() {
 
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-7xl space-y-8">
         {/* Video and Transcript Side by Side */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-4 md:p-8">
+      <div className="max-w-[1800px] mx-auto space-y-6">
+        {/* Header */}
+        <div className="space-y-2">
+          <h1 className="text-4xl md:text-5xl font-bold text-foreground tracking-tight">Session Breakdown</h1>
+          <p className="text-lg text-muted-foreground">Watch and review with synchronized transcript</p>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {/* Video Player */}
-          <Card className="flex flex-col">
-            <CardHeader>
-              <CardTitle>Session Video</CardTitle>
+          <Card className="flex flex-col border-border/50 shadow-2xl overflow-hidden bg-card/95 backdrop-blur">
+            <CardHeader className="border-b border-border/50 bg-gradient-to-b from-muted/30 to-transparent">
+              <CardTitle className="text-2xl">Session Video</CardTitle>
+              <CardDescription className="text-muted-foreground">HD Quality • 1080p</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4 flex-1 flex flex-col">
-              <div className="relative w-full bg-black rounded-lg overflow-hidden flex items-center justify-center" style={{ minHeight: '400px', maxHeight: '600px' }}>
+            <CardContent className="space-y-6 flex-1 flex flex-col p-6">
+              {/* Video Container */}
+              <div
+                className="relative w-full bg-black rounded-xl overflow-hidden shadow-2xl ring-1 ring-border/50"
+                style={{ aspectRatio: "16/9" }}
+              >
                 <video
                   ref={videoRef}
                   src={breakdown.videoUrl}
-                  className="w-full h-auto max-h-full object-contain"
+                  className="w-full h-full object-contain"
                   preload="metadata"
                   crossOrigin="anonymous"
                   controls={false}
                   playsInline
                 >
                   <source src={breakdown.videoUrl} type="video/mp4" />
-                  Your browser does not support the video tag.
                 </video>
+
+                {/* Play overlay */}
+                {!isPlaying && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity">
+                    <Button
+                      size="lg"
+                      onClick={togglePlayPause}
+                      className="h-20 w-20 rounded-full bg-primary/90 hover:bg-primary shadow-2xl hover:scale-110 transition-all duration-300"
+                    >
+                      <Play className="h-8 w-8 ml-1" />
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Video Controls */}
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {/* Progress Bar */}
-                <div className="space-y-1">
-                  <input
-                    type="range"
-                    min="0"
-                    max={duration || 0}
-                    value={currentTime}
-                    onChange={handleSeek}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                    style={{
-                      background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(currentTime / duration) * 100}%, #e5e7eb ${(currentTime / duration) * 100}%, #e5e7eb 100%)`
-                    }}
-                  />
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>{formatTime(currentTime)}</span>
+                <div className="space-y-2">
+                  <div className="relative h-2 bg-muted rounded-full overflow-hidden group cursor-pointer">
+                    <div
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary via-primary to-primary/80 transition-all duration-150 rounded-full"
+                      style={{ width: `${(currentTime / duration) * 100}%` }}
+                    />
+                    <input
+                      type="range"
+                      min="0"
+                      max={duration || 0}
+                      value={currentTime}
+                      onChange={handleSeek}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex justify-between text-sm text-muted-foreground font-mono">
+                    <span className="font-medium">{formatTime(currentTime)}</span>
                     <span>{formatTime(duration)}</span>
                   </div>
                 </div>
 
                 {/* Control Buttons */}
                 <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={togglePlayPause}
-                    className="flex items-center gap-2"
-                  >
-                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                    {isPlaying ? 'Pause' : 'Play'}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => skipTime(-10)}
+                      className="h-10 w-10 rounded-full border-border/50 hover:bg-primary hover:text-primary-foreground transition-all duration-200"
+                    >
+                      <SkipBack className="h-4 w-4" />
+                    </Button>
 
-                  <div className="flex items-center gap-2 flex-1">
+                    <Button
+                      size="icon"
+                      onClick={togglePlayPause}
+                      className="h-12 w-12 rounded-full bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200"
+                    >
+                      {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => skipTime(10)}
+                      className="h-10 w-10 rounded-full border-border/50 hover:bg-primary hover:text-primary-foreground transition-all duration-200"
+                    >
+                      <SkipForward className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {/* Volume Control */}
+                  <div className="flex items-center gap-3 flex-1 px-4">
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
                       onClick={toggleMute}
-                      className="flex items-center gap-2 cursor-pointer border bg-gray-900"
+                      className="h-9 w-9 rounded-full hover:bg-muted"
                     >
                       {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
                     </Button>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={isMuted ? 0 : volume}
-                      onChange={handleVolumeChange}
-                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                    />
+                    <div className="relative flex-1 h-1.5 bg-muted rounded-full overflow-hidden max-w-[120px]">
+                      <div
+                        className="absolute inset-y-0 left-0 bg-primary transition-all duration-150"
+                        style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
+                      />
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={isMuted ? 0 : volume}
+                        onChange={handleVolumeChange}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                    </div>
                   </div>
+
+                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-muted ml-auto">
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
                 </div>
 
                 {/* Download Button */}
-                <div className="pt-2 border-t">
+                <div className="pt-4 border-t border-border/50">
                   <Button
                     variant="outline"
-                    size="sm"
                     onClick={handleDownloadVideo}
-                    className="w-full flex items-center justify-center gap-2"
+                    className="w-full h-11 rounded-lg border-border/50 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all duration-200 bg-transparent"
                   >
-                    <Download className="h-4 w-4" />
-                    Download Video
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Session
                   </Button>
                 </div>
               </div>
@@ -844,67 +994,90 @@ function BreakdownContent() {
           </Card>
 
           {/* Transcript */}
-          <Card className="flex flex-col">
-            <CardHeader>
-              <CardTitle>Transcript</CardTitle>
-              <CardDescription>Live transcript - scrolls automatically with video</CardDescription>
+          <Card className="flex flex-col border-border/50 shadow-2xl overflow-hidden bg-card/95 backdrop-blur">
+            <CardHeader className="border-b border-border/50 bg-gradient-to-b from-muted/30 to-transparent">
+              <CardTitle className="text-2xl">Live Transcript</CardTitle>
+              <CardDescription className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+                </span>
+                Auto-synced with video playback
+              </CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col min-h-0">
-              <div 
+            <CardContent className="flex-1 flex flex-col min-h-0 p-6">
+              <div
                 ref={transcriptRef}
-                className="space-y-3 overflow-y-auto pr-2 flex-1"
-                style={{ minHeight: '400px', maxHeight: '530px' }}
+                className="space-y-4 overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+                style={{ height: "500px" }}
               >
                 {breakdown.timeline.transcript.map((segment, idx) => {
-                  const isActive = currentTranscriptIndex === idx;
+                  const isActive = currentTranscriptIndex === idx
                   return (
                     <div
                       key={idx}
-                      className={`border-l-4 pl-4 pb-3 last:pb-0 rounded-r-lg transition-all cursor-pointer ${
+                      className={`relative pl-5 pb-4 rounded-xl transition-all duration-300 cursor-pointer group ${
                         isActive
-                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 shadow-sm scale-[1.02]'
-                          : 'border-blue-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                          ? "bg-gradient-to-br from-primary/10 via-primary/5 to-transparent scale-[1.02] shadow-lg"
+                          : "hover:bg-muted/50"
                       }`}
                       onClick={() => {
                         if (videoRef.current) {
-                          videoRef.current.currentTime = segment.startTime;
-                          setCurrentTime(segment.startTime);
+                          videoRef.current.currentTime = segment.startTime
+                          setCurrentTime(segment.startTime)
                           if (!isPlaying) {
-                            videoRef.current.play();
-                            setIsPlaying(true);
+                            videoRef.current.play()
+                            setIsPlaying(true)
                           }
                         }
                       }}
                     >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`text-xs font-mono font-semibold px-2 py-1 rounded ${
+                      {/* Accent line */}
+                      <div
+                        className={`absolute left-0 top-0 bottom-0 w-1 rounded-full transition-all duration-300 ${
                           isActive
-                            ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-800'
-                            : 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
-                        }`}>
-                          {formatTime(segment.startTime)} - {formatTime(segment.endTime)}
+                            ? "bg-gradient-to-b from-primary via-primary to-primary/50 shadow-lg shadow-primary/50"
+                            : "bg-border group-hover:bg-primary/50"
+                        }`}
+                      />
+
+                      <div className="flex items-center gap-3 mb-3">
+                        <span
+                          className={`text-xs font-mono font-semibold px-3 py-1.5 rounded-full transition-all duration-300 ${
+                            isActive
+                              ? "bg-primary text-primary-foreground shadow-md"
+                              : "bg-muted text-muted-foreground group-hover:bg-primary/20"
+                          }`}
+                        >
+                          {formatTime(segment.startTime)} → {formatTime(segment.endTime)}
                         </span>
                         {isActive && (
-                          <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold animate-pulse">
-                            ● Live
+                          <span className="flex items-center gap-1.5 text-xs text-primary font-semibold">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                            </span>
+                            LIVE
                           </span>
                         )}
                       </div>
-                      <p className={`text-base leading-relaxed mb-2 ${
-                        isActive
-                          ? 'text-foreground font-medium'
-                          : 'text-foreground'
-                      }`}>
+
+                      <p
+                        className={`text-base leading-relaxed mb-3 transition-all duration-300 ${
+                          isActive ? "text-foreground font-medium" : "text-foreground/80 group-hover:text-foreground"
+                        }`}
+                      >
                         {segment.text}
                       </p>
+
                       <div className="flex flex-wrap gap-2">
                         {segment.keyPhrases.map((phrase, phraseIdx) => (
                           <span
                             key={phraseIdx}
-                            className={`text-xs px-2 py-1 rounded-full ${
+                            className={`text-xs px-2.5 py-1 rounded-full font-medium transition-all duration-300 ${
                               isActive
-                                ? 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                ? "bg-primary/20 text-primary border border-primary/30"
+                                : "bg-muted text-muted-foreground group-hover:bg-muted-foreground/10"
                             }`}
                           >
                             {phrase}
@@ -912,264 +1085,291 @@ function BreakdownContent() {
                         ))}
                       </div>
                     </div>
-                  );
+                  )
                 })}
               </div>
             </CardContent>
           </Card>
         </div>
+      </div>
+    </div>
 
         {/* Timeline View - Bottom */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Timeline View</CardTitle>
-            <CardDescription>
-              Interactive timeline showing audio, video, and score events with timestamps
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* Explanation Section */}
-            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <h4 className="text-sm font-semibold mb-2 text-blue-900 dark:text-blue-100">
-                📖 How to Read This Timeline
-              </h4>
-              <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-                This timeline visualizes your session performance across three key dimensions. Each track represents different aspects of your delivery, with color-coded segments indicating performance quality. The horizontal axis represents time, and each colored bar shows performance during that time period.
+        <Card className="border-cyan-500/20 bg-gradient-to-br from-gray-900 via-gray-900 to-cyan-950/30 shadow-2xl shadow-cyan-500/10">
+      <CardHeader className="border-b border-cyan-500/20 bg-gray-900/50 backdrop-blur-sm">
+        <CardTitle className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+          Timeline View
+        </CardTitle>
+        <CardDescription className="text-gray-400">
+          Interactive timeline showing audio, video, and score events with timestamps
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-6">
+        {/* Collapsible Timeline Help Section */}
+        <div className="mb-8 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-xl backdrop-blur-sm shadow-lg shadow-cyan-500/5 overflow-hidden">
+          <button
+            onClick={() => setShowTimelineHelp(!showTimelineHelp)}
+            className="w-full p-6 flex items-center justify-between hover:bg-cyan-500/5 transition-colors duration-200"
+          >
+            <h4 className="text-base font-bold text-cyan-100 flex items-center gap-2">
+              <span className="text-xl">📖</span>
+              How to Read This Timeline
+            </h4>
+            <ChevronDown
+              className={`h-5 w-5 text-cyan-100 transition-transform duration-300 ${
+                showTimelineHelp ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+          
+          {showTimelineHelp && (
+            <div className="px-6 pb-6 border-t border-cyan-500/20 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+              <p className="text-sm text-gray-300 leading-relaxed">
+                This timeline visualizes your session performance across three key dimensions. Each track represents
+                different aspects of your delivery, with color-coded segments indicating performance quality. The horizontal
+                axis represents time, and each colored bar shows performance during that time period.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div className="bg-white dark:bg-gray-800 p-3 rounded border border-blue-200 dark:border-blue-700">
-                  <p className="font-semibold text-blue-900 dark:text-blue-100 mb-2">📊 Score Track:</p>
-                  <p className="text-blue-700 dark:text-blue-300 space-y-1">
-                    <span className="flex items-center gap-1">
-                      <span className="inline-block w-3 h-3 bg-red-500 rounded"></span>
-                      Red markers = Performance dips (click to see details)
+                <div className="bg-gray-800/80 backdrop-blur-sm p-4 rounded-lg border border-cyan-500/20 hover:border-cyan-500/40 transition-colors shadow-lg">
+                  <p className="font-bold text-cyan-100 mb-3 text-sm">📊 Score Track</p>
+                  <p className="text-gray-300 space-y-2">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block w-4 h-4 bg-red-500 rounded-full shadow-lg shadow-red-500/50"></span>
+                      <span className="leading-relaxed">Red markers = Performance dips (click to see details)</span>
                     </span>
-                    <span className="flex items-center gap-1">
-                      <span className="inline-block w-3 h-3 bg-green-500 rounded"></span>
-                      Green markers = Performance peaks (strong moments)
-                    </span>
-                  </p>
-                </div>
-                <div className="bg-white dark:bg-gray-800 p-3 rounded border border-blue-200 dark:border-blue-700">
-                  <p className="font-semibold text-blue-900 dark:text-blue-100 mb-2">🎨 Color Legend:</p>
-                  <p className="text-blue-700 dark:text-blue-300 space-y-1">
-                    <span className="flex items-center gap-1">
-                      <span className="inline-block w-3 h-3 bg-green-500 rounded"></span>
-                      Green = Excellent performance
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="inline-block w-3 h-3 bg-blue-500 rounded"></span>
-                      Blue = Good/Normal performance
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="inline-block w-3 h-3 bg-yellow-500 rounded"></span>
-                      Yellow = Moderate (room for improvement)
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="inline-block w-3 h-3 bg-red-500 rounded"></span>
-                      Red = Needs improvement
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block w-4 h-4 bg-green-500 rounded-full shadow-lg shadow-green-500/50"></span>
+                      <span className="leading-relaxed">Green markers = Performance peaks (strong moments)</span>
                     </span>
                   </p>
                 </div>
-                <div className="bg-white dark:bg-gray-800 p-3 rounded border border-blue-200 dark:border-blue-700">
-                  <p className="font-semibold text-blue-900 dark:text-blue-100 mb-2">🖱️ Interactions:</p>
-                  <p className="text-blue-700 dark:text-blue-300 space-y-1">
-                    <span>• Click any colored segment to jump to that time in the video</span>
-                    <span>• Hover over segments to see detailed metrics (pace, eye contact, etc.)</span>
-                    <span>• Click red/green score markers to see specific feedback messages</span>
-                    <span>• Use time markers at top to navigate quickly</span>
+                <div className="bg-gray-800/80 backdrop-blur-sm p-4 rounded-lg border border-cyan-500/20 hover:border-cyan-500/40 transition-colors shadow-lg">
+                  <p className="font-bold text-cyan-100 mb-3 text-sm">🎨 Color Legend</p>
+                  <p className="text-gray-300 space-y-2">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block w-4 h-4 bg-green-500 rounded-full shadow-lg shadow-green-500/50"></span>
+                      <span className="leading-relaxed">Excellent performance</span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block w-4 h-4 bg-blue-500 rounded-full shadow-lg shadow-blue-500/50"></span>
+                      <span className="leading-relaxed">Good/Normal performance</span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block w-4 h-4 bg-yellow-500 rounded-full shadow-lg shadow-yellow-500/50"></span>
+                      <span className="leading-relaxed">Moderate (room for improvement)</span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block w-4 h-4 bg-red-500 rounded-full shadow-lg shadow-red-500/50"></span>
+                      <span className="leading-relaxed">Needs improvement</span>
+                    </span>
+                  </p>
+                </div>
+                <div className="bg-gray-800/80 backdrop-blur-sm p-4 rounded-lg border border-cyan-500/20 hover:border-cyan-500/40 transition-colors shadow-lg">
+                  <p className="font-bold text-cyan-100 mb-3 text-sm">🖱️ Interactions</p>
+                  <p className="text-gray-300 space-y-2 leading-relaxed">
+                    <span className="block">• Click any colored segment to jump to that time in the video</span>
+                    <span className="block">• Hover over segments to see detailed metrics (pace, eye contact, etc.)</span>
+                    <span className="block">• Click red/green score markers to see specific feedback messages</span>
+                    <span className="block">• Use time markers at top to navigate quickly</span>
                   </p>
                 </div>
               </div>
             </div>
+          )}
+        </div>
 
-            <div className="space-y-6">
-              {/* Score Dips & Peaks */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold">📊 Score Dips & Peaks</h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Visual markers showing moments when your overall performance score dropped (red) or peaked (green). Click markers to see detailed feedback.
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap ml-4">
-                    {formatTime(0)} - {formatTime(breakdown.duration)}
-                  </span>
-                </div>
-                <div className="relative h-20 bg-gray-100 dark:bg-gray-800 rounded-lg p-3">
-                  <div className="relative h-full">
-                    {/* Time markers */}
-                    {[0, 25, 50, 75, 100].map((percent) => {
-                      const time = (percent / 100) * breakdown.duration;
-                      return (
-                        <div
-                          key={percent}
-                          className="absolute top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600"
-                          style={{ left: `${percent}%` }}
-                        >
-                          <span className="absolute -top-5 left-1/2 transform -translate-x-1/2 text-xs text-muted-foreground whitespace-nowrap">
-                            {formatTime(time)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {breakdown.timeline.scoreDips.map((dip, idx) => {
-                      const position = (dip.timestamp / breakdown.duration) * 100;
-                      return (
-                        <div
-                          key={idx}
-                          className="absolute top-0 bottom-0 w-1.5 bg-red-500 cursor-pointer hover:bg-red-600 transition-colors group"
-                          style={{ left: `${position}%` }}
-                          onClick={() => handleDipClick(dip)}
-                        >
-                          <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs text-red-600 dark:text-red-400 font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                            {formatTime(dip.timestamp)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {breakdown.timeline.scorePeaks.map((peak, idx) => {
-                      const position = (peak.timestamp / breakdown.duration) * 100;
-                      return (
-                        <div
-                          key={`peak-${idx}`}
-                          className="absolute top-0 bottom-0 w-1.5 bg-green-500 cursor-pointer hover:bg-green-600 transition-colors group"
-                          style={{ left: `${position}%` }}
-                          onClick={() => {
-                            if (videoRef.current) {
-                              videoRef.current.currentTime = peak.timestamp;
-                              setCurrentTime(peak.timestamp);
-                            }
-                          }}
-                        >
-                          <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs text-green-600 dark:text-green-400 font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                            {formatTime(peak.timestamp)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+        <div className="space-y-8">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-cyan-100 flex items-center gap-2">
+                  <span className="text-lg">📊</span>
+                  Score Dips & Peaks
+                </h3>
+                <p className="text-xs text-gray-400 mt-2 leading-relaxed max-w-2xl">
+                  Visual markers showing moments when your overall performance score dropped (red) or peaked (green).
+                  Click markers to see detailed feedback.
+                </p>
               </div>
-
-              {/* Audio Track */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold">🎧 Audio Track (Pace & Pauses)</h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Measures your speaking pace (words per minute) and pause frequency. Green = optimal pace (140-160 wpm), Blue = normal, Yellow = moderate, Red = too fast (&gt;180 wpm) or too slow (&lt;120 wpm).
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap ml-4">
-                    {formatTime(0)} - {formatTime(breakdown.duration)}
-                  </span>
-                </div>
-                <div className="relative h-16 bg-gray-100 dark:bg-gray-800 rounded-lg p-3">
-                  <div className="relative h-full">
-                    {/* Time markers */}
-                    {[0, 25, 50, 75, 100].map((percent) => {
-                      const time = (percent / 100) * breakdown.duration;
-                      return (
-                        <div
-                          key={percent}
-                          className="absolute top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600"
-                          style={{ left: `${percent}%` }}
-                        />
-                      );
-                    })}
-                    {breakdown.timeline.audio.map((segment, idx) => {
-                      const left = (segment.startTime / breakdown.duration) * 100;
-                      const width = ((segment.endTime - segment.startTime) / breakdown.duration) * 100;
-                      return (
-                        <div
-                          key={idx}
-                          className={`absolute top-1 bottom-1 rounded ${getTrackColor(segment.type)} opacity-80 hover:opacity-100 transition-opacity cursor-pointer group`}
-                          style={{ left: `${left}%`, width: `${width}%` }}
-                          title={`${formatTime(segment.startTime)} - ${formatTime(segment.endTime)}: ${segment.type} - ${segment.pace} wpm, ${segment.pauses} pauses${segment.message ? ` - ${segment.message}` : ''}`}
-                        >
-                          <div className="absolute -top-5 left-0 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                            {formatTime(segment.startTime)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Video Track */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold">🎥 Video Track (Eye Contact & Gestures)</h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Tracks your visual engagement: eye contact percentage and gesture frequency. Green = excellent engagement (85%+ eye contact, frequent gestures), Blue = good, Yellow = moderate, Red = low engagement (needs improvement).
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap ml-4">
-                    {formatTime(0)} - {formatTime(breakdown.duration)}
-                  </span>
-                </div>
-                <div className="relative h-16 bg-gray-100 dark:bg-gray-800 rounded-lg p-3">
-                  <div className="relative h-full">
-                    {/* Time markers */}
-                    {[0, 25, 50, 75, 100].map((percent) => {
-                      const time = (percent / 100) * breakdown.duration;
-                      return (
-                        <div
-                          key={percent}
-                          className="absolute top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600"
-                          style={{ left: `${percent}%` }}
-                        />
-                      );
-                    })}
-                    {breakdown.timeline.video.map((segment, idx) => {
-                      const left = (segment.startTime / breakdown.duration) * 100;
-                      const width = ((segment.endTime - segment.startTime) / breakdown.duration) * 100;
-                      return (
-                        <div
-                          key={idx}
-                          className={`absolute top-1 bottom-1 rounded ${getTrackColor(segment.type)} opacity-80 hover:opacity-100 transition-opacity cursor-pointer group`}
-                          style={{ left: `${left}%`, width: `${width}%` }}
-                          title={`${formatTime(segment.startTime)} - ${formatTime(segment.endTime)}: ${segment.type} - Eye: ${segment.eyeContact}%, Gestures: ${segment.gestures}${segment.message ? ` - ${segment.message}` : ''}`}
-                        >
-                          <div className="absolute -top-5 left-0 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                            {formatTime(segment.startTime)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Selected Dip Message */}
-              {selectedDip && (
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-                  <div className="flex items-start gap-2 mb-2">
-                    <span className="text-lg">⚠️</span>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                        Performance Dip Detected
-                      </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                        At {formatTime(selectedDip.timestamp)} • Score dropped to {selectedDip.score}
-                      </p>
+              <span className="text-xs text-gray-500 whitespace-nowrap ml-4 font-mono bg-gray-800/50 px-3 py-1 rounded-full">
+                {formatTime(0)} - {formatTime(breakdown.duration)}
+              </span>
+            </div>
+            <div className="relative h-24 bg-gray-800/50 rounded-xl p-4 border border-cyan-500/20 shadow-inner backdrop-blur-sm">
+              <div className="relative h-full">
+                {[0, 25, 50, 75, 100].map((percent) => {
+                  const time = (percent / 100) * breakdown.duration
+                  return (
+                    <div
+                      key={percent}
+                      className="absolute top-0 bottom-0 w-px bg-gradient-to-b from-cyan-500/30 via-cyan-500/20 to-transparent"
+                      style={{ left: `${percent}%` }}
+                    >
+                      <span className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs text-gray-500 whitespace-nowrap font-mono">
+                        {formatTime(time)}
+                      </span>
                     </div>
-                  </div>
-                  <p className="text-sm text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/30 p-3 rounded mt-2">
-                    {selectedDip.message}
-                  </p>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 italic">
-                    💡 Tip: Click the video player above to watch this moment and understand what caused the dip.
+                  )
+                })}
+                {breakdown.timeline.scoreDips.map((dip, idx) => {
+                  const position = (dip.timestamp / breakdown.duration) * 100
+                  return (
+                    <div
+                      key={idx}
+                      className="absolute top-0 bottom-0 w-2 bg-red-500 cursor-pointer hover:bg-red-400 transition-all duration-300 group rounded-full shadow-lg shadow-red-500/50 hover:shadow-red-500/80 hover:scale-110"
+                      style={{ left: `${position}%` }}
+                      onClick={() => handleDipClick(dip)}
+                    >
+                      <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 text-xs text-red-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-gray-900/90 px-2 py-1 rounded shadow-lg">
+                        {formatTime(dip.timestamp)}
+                      </div>
+                    </div>
+                  )
+                })}
+                {breakdown.timeline.scorePeaks.map((peak, idx) => {
+                  const position = (peak.timestamp / breakdown.duration) * 100
+                  return (
+                    <div
+                      key={`peak-${idx}`}
+                      className="absolute top-0 bottom-0 w-2 bg-green-500 cursor-pointer hover:bg-green-400 transition-all duration-300 group rounded-full shadow-lg shadow-green-500/50 hover:shadow-green-500/80 hover:scale-110"
+                      style={{ left: `${position}%` }}
+                      onClick={() => {
+                        if (videoRef.current) {
+                          videoRef.current.currentTime = peak.timestamp
+                          setCurrentTime(peak.timestamp)
+                        }
+                      }}
+                    >
+                      <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 text-xs text-green-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-gray-900/90 px-2 py-1 rounded shadow-lg">
+                        {formatTime(peak.timestamp)}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-cyan-100 flex items-center gap-2">
+                  <span className="text-lg">🎧</span>
+                  Audio Track (Pace & Pauses)
+                </h3>
+                <p className="text-xs text-gray-400 mt-2 leading-relaxed max-w-2xl">
+                  Measures your speaking pace (words per minute) and pause frequency. Green = optimal pace (140-160
+                  wpm), Blue = normal, Yellow = moderate, Red = too fast (&gt;180 wpm) or too slow (&lt;120 wpm).
+                </p>
+              </div>
+              <span className="text-xs text-gray-500 whitespace-nowrap ml-4 font-mono bg-gray-800/50 px-3 py-1 rounded-full">
+                {formatTime(0)} - {formatTime(breakdown.duration)}
+              </span>
+            </div>
+            <div className="relative h-20 bg-gray-800/50 rounded-xl p-4 border border-cyan-500/20 shadow-inner backdrop-blur-sm">
+              <div className="relative h-full">
+                {[0, 25, 50, 75, 100].map((percent) => {
+                  const time = (percent / 100) * breakdown.duration
+                  return (
+                    <div
+                      key={percent}
+                      className="absolute top-0 bottom-0 w-px bg-gradient-to-b from-cyan-500/30 via-cyan-500/20 to-transparent"
+                      style={{ left: `${percent}%` }}
+                    />
+                  )
+                })}
+                {breakdown.timeline.audio.map((segment, idx) => {
+                  const left = (segment.startTime / breakdown.duration) * 100
+                  const width = ((segment.endTime - segment.startTime) / breakdown.duration) * 100
+                  return (
+                    <div
+                      key={idx}
+                      className={`absolute top-2 bottom-2 rounded-lg ${getTrackColor(segment.type)} opacity-80 hover:opacity-100 transition-all duration-300 cursor-pointer group hover:scale-105 shadow-lg`}
+                      style={{ left: `${left}%`, width: `${width}%` }}
+                      title={`${formatTime(segment.startTime)} - ${formatTime(segment.endTime)}: ${segment.type} - ${segment.pace} wpm, ${segment.pauses} pauses${segment.message ? ` - ${segment.message}` : ""}`}
+                    >
+                      <div className="absolute -top-6 left-0 text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-gray-900/90 px-2 py-1 rounded shadow-lg font-mono">
+                        {formatTime(segment.startTime)}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-cyan-100 flex items-center gap-2">
+                  <span className="text-lg">🎥</span>
+                  Video Track (Eye Contact & Gestures)
+                </h3>
+                <p className="text-xs text-gray-400 mt-2 leading-relaxed max-w-2xl">
+                  Tracks your visual engagement: eye contact percentage and gesture frequency. Green = excellent
+                  engagement (85%+ eye contact, frequent gestures), Blue = good, Yellow = moderate, Red = low engagement
+                  (needs improvement).
+                </p>
+              </div>
+              <span className="text-xs text-gray-500 whitespace-nowrap ml-4 font-mono bg-gray-800/50 px-3 py-1 rounded-full">
+                {formatTime(0)} - {formatTime(breakdown.duration)}
+              </span>
+            </div>
+            <div className="relative h-20 bg-gray-800/50 rounded-xl p-4 border border-cyan-500/20 shadow-inner backdrop-blur-sm">
+              <div className="relative h-full">
+                {[0, 25, 50, 75, 100].map((percent) => {
+                  const time = (percent / 100) * breakdown.duration
+                  return (
+                    <div
+                      key={percent}
+                      className="absolute top-0 bottom-0 w-px bg-gradient-to-b from-cyan-500/30 via-cyan-500/20 to-transparent"
+                      style={{ left: `${percent}%` }}
+                    />
+                  )
+                })}
+                {breakdown.timeline.video.map((segment, idx) => {
+                  const left = (segment.startTime / breakdown.duration) * 100
+                  const width = ((segment.endTime - segment.startTime) / breakdown.duration) * 100
+                  return (
+                    <div
+                      key={idx}
+                      className={`absolute top-2 bottom-2 rounded-lg ${getTrackColor(segment.type)} opacity-80 hover:opacity-100 transition-all duration-300 cursor-pointer group hover:scale-105 shadow-lg`}
+                      style={{ left: `${left}%`, width: `${width}%` }}
+                      title={`${formatTime(segment.startTime)} - ${formatTime(segment.endTime)}: ${segment.type} - Eye: ${segment.eyeContact}%, Gestures: ${segment.gestures}${segment.message ? ` - ${segment.message}` : ""}`}
+                    >
+                      <div className="absolute -top-6 left-0 text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-gray-900/90 px-2 py-1 rounded shadow-lg font-mono">
+                        {formatTime(segment.startTime)}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          {selectedDip && (
+            <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl p-5 backdrop-blur-sm shadow-lg shadow-amber-500/10 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <div className="flex items-start gap-3 mb-3">
+                <span className="text-2xl">⚠️</span>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-amber-100">Performance Dip Detected</p>
+                  <p className="text-xs text-amber-300 mt-1 font-mono">
+                    At {formatTime(selectedDip.timestamp)} • Score dropped to {selectedDip.score}
                   </p>
                 </div>
-              )}
+              </div>
+              <p className="text-sm text-amber-100 bg-amber-500/10 p-4 rounded-lg mt-3 leading-relaxed border border-amber-500/20">
+                {selectedDip.message}
+              </p>
+              <p className="text-xs text-amber-300 mt-3 italic flex items-center gap-2">
+                <span>💡</span>
+                <span>Tip: Click the video player above to watch this moment and understand what caused the dip.</span>
+              </p>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
+      </CardContent>
+    </Card>
 
         {/* Metric Breakdown Cards */}
         <div className="space-y-4">
@@ -1358,7 +1558,7 @@ function BreakdownContent() {
           </Card>
 
           {/* Skill Progress Tracker */}
-          <Card>
+          {/* <Card>
             <CardHeader>
               <CardTitle>Skill Progress Tracker</CardTitle>
               <CardDescription>
@@ -1375,7 +1575,6 @@ function BreakdownContent() {
                         <CardTitle className="text-lg">{skill.name}</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {/* Progress Bar */}
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Baseline: {skill.baseline}</span>
@@ -1394,7 +1593,6 @@ function BreakdownContent() {
                           </div>
                         </div>
 
-                        {/* Milestone Info */}
                         <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
                           <p className="text-xs font-semibold text-blue-900 dark:text-blue-100 mb-1">
                             Next Milestone:
@@ -1404,7 +1602,6 @@ function BreakdownContent() {
                           </p>
                         </div>
 
-                        {/* AI Suggestions */}
                         <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-800">
                           <p className="text-xs font-semibold text-purple-900 dark:text-purple-100 mb-2">
                             🤖 AI Suggestions to Achieve Next Milestone:
@@ -1424,7 +1621,7 @@ function BreakdownContent() {
                 })}
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
         </div>
       </main>
     </div>
