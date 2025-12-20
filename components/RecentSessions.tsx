@@ -22,6 +22,7 @@ import axios from "axios"
 
 // S3 Upload Service URL
 const S3_SERVICE_URL = 'http://localhost:3000/api'
+const uploadAudioReference = 'http://26.228.167.86:8000/upload-video-from-s3'
 
 interface WeakMoment {
   timestamp: string
@@ -147,6 +148,7 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
   const [createContext, setCreateContext] = useState("")
   const [createFile, setCreateFile] = useState<File | null>(null)
   const [createSessionName, setCreateSessionName] = useState("")
+  const [audioRefName, setAudioRefName] = useState("")
 
   const handleCreateSessionClick = () => {
     setShowCreateForm((v) => !v)
@@ -248,6 +250,27 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
         videoPlaybackUrl = playbackUrl
         console.log("🎬 Full Video Playback URL:", videoPlaybackUrl)
 
+        // Step 6: Send to external audio reference API
+        setUploadStatus("Sending to audio analysis service...")
+        setUploadProgress(85)
+        console.log("📤 Sending to audio reference API...")
+
+        const audioReferencePayload = {
+          name: audioRefName,
+          video_s3_url: videoPlaybackUrl,
+          max_duration_seconds: 120,
+        }
+
+        console.log("📊 Audio Reference Payload:", audioReferencePayload)
+
+        try {
+          const audioResponse = await axios.post(uploadAudioReference, audioReferencePayload)
+          console.log("✅ Audio reference API response:", audioResponse.data)
+        } catch (audioError) {
+          console.warn("⚠️  Audio reference API error (non-blocking):", audioError)
+          // Non-blocking error - continue with session creation
+        }
+
         setAnalyzing(false)
         setUploadStatus("Complete!")
         setUploadProgress(100)
@@ -323,6 +346,7 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
       setYtUrl("")
       setCreateContext("")
       setCreateSessionName("")
+      setAudioRefName("")
     }
   }
 
@@ -499,6 +523,13 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
                         placeholder="Session name (optional)"
                         value={createSessionName}
                         onChange={(e) => setCreateSessionName(e.target.value)}
+                        className="h-11"
+                      />
+                      <Input
+                        type="text"
+                        placeholder="Audio reference name (required for analysis)"
+                        value={audioRefName}
+                        onChange={(e) => setAudioRefName(e.target.value)}
                         className="h-11"
                       />
                       <textarea
