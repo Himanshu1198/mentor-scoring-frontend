@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +36,8 @@ export default function LoginPage() {
       // Route based on role
       if (role === "student") {
         router.push("/student");
+      } else if (role === "mentor") {
+        router.push("/mentor/dashboard");
       } else {
         router.push("/public/mentors");
       }
@@ -131,6 +134,14 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Logging in..." : "Login"}
             </Button>
+
+            {/* Signup Link */}
+            <div className="text-center text-sm">
+              <span className="text-muted-foreground">Don't have an account? </span>
+              <Link href="/signup" className="text-primary hover:underline font-medium">
+                Sign up here
+              </Link>
+            </div>
           </form>
         </CardContent>
       </Card>
