@@ -141,49 +141,73 @@ export function MentorProfile({ mentorInfo, onUpdate }: MentorProfileProps) {
   return (
     <div className="space-y-3 animate-fade-in">
       {success && (
-        <div className="animate-fade-in-scale bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-          <p className="text-emerald-700 dark:text-emerald-300 text-xs font-medium">{success}</p>
+        <div className="animate-fade-in-scale bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 flex items-center gap-3 shadow-sm">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <p className="text-emerald-700 dark:text-emerald-300 text-sm font-medium">{success}</p>
         </div>
       )}
 
       {error && (
-        <div className="animate-fade-in-scale bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-3 flex items-center gap-2">
-          <XCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
-          <p className="text-red-700 dark:text-red-300 text-xs font-medium">{error}</p>
+        <div className="animate-fade-in-scale bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-center gap-3 shadow-sm">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center">
+            <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+          </div>
+          <p className="text-red-700 dark:text-red-300 text-sm font-medium">{error}</p>
         </div>
       )}
 
-      <Card className="border card-hover">
-        <div className="p-4 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center flex-shrink-0">
-              <span className="text-lg font-bold text-primary">{mentorInfo.name.charAt(0).toUpperCase()}</span>
+      <Card className="border card-hover relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
+
+        <div className="p-6 space-y-6 relative">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary via-primary/80 to-primary/60 flex items-center justify-center shadow-lg animate-slide-up">
+                <span className="text-2xl font-bold text-white">{mentorInfo.name.charAt(0).toUpperCase()}</span>
+              </div>
+              <div className="absolute inset-0 rounded-full bg-primary/20 animate-pulse-ring" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xl font-bold truncate">{mentorInfo.name}</p>
-              <p className="text-xs text-muted-foreground">Mentor Profile</p>
+            <div className="flex-1 min-w-0 animate-slide-up" style={{ animationDelay: "100ms" }}>
+              <p className="text-2xl font-bold truncate bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                {mentorInfo.name}
+              </p>
+              <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Mentor Profile
+              </p>
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50">
-              <Mail className="w-4 h-4 text-primary flex-shrink-0" />
+          <div className="grid gap-3">
+            <div
+              className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-br from-muted/80 to-muted/40 border border-border/50 transition-all duration-300 hover:shadow-md hover:scale-[1.02] animate-slide-up"
+              style={{ animationDelay: "200ms" }}
+            >
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Mail className="w-5 h-5 text-primary" />
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground">Email</p>
-                <p className="text-sm font-medium truncate">{mentorInfo.email}</p>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Email Address</p>
+                <p className="text-sm font-semibold truncate">{mentorInfo.email}</p>
               </div>
             </div>
 
             {mentorInfo.createdAt && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50">
-                <Calendar className="w-4 h-4 text-primary flex-shrink-0" />
+              <div
+                className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-br from-muted/80 to-muted/40 border border-border/50 transition-all duration-300 hover:shadow-md hover:scale-[1.02] animate-slide-up"
+                style={{ animationDelay: "300ms" }}
+              >
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Calendar className="w-5 h-5 text-primary" />
+                </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground">Member Since</p>
-                  <p className="text-sm font-medium">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Member Since</p>
+                  <p className="text-sm font-semibold">
                     {new Date(mentorInfo.createdAt).toLocaleDateString("en-US", {
                       year: "numeric",
-                      month: "short",
+                      month: "long",
                       day: "numeric",
                     })}
                   </p>
@@ -192,34 +216,42 @@ export function MentorProfile({ mentorInfo, onUpdate }: MentorProfileProps) {
             )}
           </div>
 
-          <div className="flex gap-2 pt-3 border-t">
+          <div className="flex gap-3 pt-4 border-t animate-slide-up" style={{ animationDelay: "400ms" }}>
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
               <DialogTrigger asChild>
-                <Button variant="default" size="sm" className="gap-1.5 flex-1 transition-smooth hover:scale-[1.02]">
-                  <Edit2 className="w-3.5 h-3.5" />
-                  Edit
+                <Button
+                  variant="default"
+                  size="default"
+                  className="gap-2 flex-1 transition-all duration-300 hover:scale-[1.03] hover:shadow-lg group"
+                >
+                  <Edit2 className="w-4 h-4 transition-transform group-hover:rotate-12" />
+                  Edit Profile
                 </Button>
               </DialogTrigger>
-              <DialogContent className="animate-fade-in-scale">
+              <DialogContent className="animate-fade-in-scale sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Edit Profile</DialogTitle>
+                  <DialogTitle className="text-xl">Edit Profile</DialogTitle>
                   <DialogDescription>Update your name and email address</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleEditSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Full Name</Label>
+                <form onSubmit={handleEditSubmit} className="space-y-5">
+                  <div className="space-y-2 animate-slide-up" style={{ animationDelay: "100ms" }}>
+                    <Label htmlFor="name" className="text-sm font-medium">
+                      Full Name
+                    </Label>
                     <Input
                       id="name"
                       name="name"
                       value={editFormData.name}
                       onChange={handleEditChange}
                       placeholder="Enter your full name"
-                      className="transition-smooth focus:scale-[1.01]"
+                      className="transition-all duration-300 focus:scale-[1.01] focus:shadow-md"
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
+                  <div className="space-y-2 animate-slide-up" style={{ animationDelay: "200ms" }}>
+                    <Label htmlFor="email" className="text-sm font-medium">
+                      Email Address
+                    </Label>
                     <Input
                       id="email"
                       name="email"
@@ -227,15 +259,21 @@ export function MentorProfile({ mentorInfo, onUpdate }: MentorProfileProps) {
                       value={editFormData.email}
                       onChange={handleEditChange}
                       placeholder="Enter your email"
-                      className="transition-smooth focus:scale-[1.01]"
+                      className="transition-all duration-300 focus:scale-[1.01] focus:shadow-md"
                       required
                     />
                   </div>
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} disabled={isLoading}>
+                  <DialogFooter className="gap-2 animate-slide-up" style={{ animationDelay: "300ms" }}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsEditOpen(false)}
+                      disabled={isLoading}
+                      className="transition-all hover:scale-105"
+                    >
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={isLoading} className="gap-2">
+                    <Button type="submit" disabled={isLoading} className="gap-2 transition-all hover:scale-105">
                       {isLoading ? (
                         <>
                           <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
@@ -254,21 +292,23 @@ export function MentorProfile({ mentorInfo, onUpdate }: MentorProfileProps) {
               <DialogTrigger asChild>
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="gap-1.5 flex-1 transition-smooth hover:scale-[1.02] bg-transparent"
+                  size="default"
+                  className="gap-2 flex-1 transition-all duration-300 hover:scale-[1.03] hover:shadow-lg hover:bg-muted group bg-transparent"
                 >
-                  <Lock className="w-3.5 h-3.5" />
-                  Password
+                  <Lock className="w-4 h-4 transition-transform group-hover:scale-110" />
+                  Change Password
                 </Button>
               </DialogTrigger>
-              <DialogContent className="animate-fade-in-scale">
+              <DialogContent className="animate-fade-in-scale sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Reset Password</DialogTitle>
+                  <DialogTitle className="text-xl">Change Password</DialogTitle>
                   <DialogDescription>Enter your current password and new password</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="currentPassword">Current Password</Label>
+                <form onSubmit={handlePasswordSubmit} className="space-y-5">
+                  <div className="space-y-2 animate-slide-up" style={{ animationDelay: "100ms" }}>
+                    <Label htmlFor="currentPassword" className="text-sm font-medium">
+                      Current Password
+                    </Label>
                     <Input
                       id="currentPassword"
                       name="currentPassword"
@@ -276,12 +316,14 @@ export function MentorProfile({ mentorInfo, onUpdate }: MentorProfileProps) {
                       value={passwordFormData.currentPassword}
                       onChange={handlePasswordChange}
                       placeholder="Enter current password"
-                      className="transition-smooth focus:scale-[1.01]"
+                      className="transition-all duration-300 focus:scale-[1.01] focus:shadow-md"
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password</Label>
+                  <div className="space-y-2 animate-slide-up" style={{ animationDelay: "200ms" }}>
+                    <Label htmlFor="newPassword" className="text-sm font-medium">
+                      New Password
+                    </Label>
                     <Input
                       id="newPassword"
                       name="newPassword"
@@ -289,12 +331,14 @@ export function MentorProfile({ mentorInfo, onUpdate }: MentorProfileProps) {
                       value={passwordFormData.newPassword}
                       onChange={handlePasswordChange}
                       placeholder="Enter new password (min. 6 characters)"
-                      className="transition-smooth focus:scale-[1.01]"
+                      className="transition-all duration-300 focus:scale-[1.01] focus:shadow-md"
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <div className="space-y-2 animate-slide-up" style={{ animationDelay: "300ms" }}>
+                    <Label htmlFor="confirmPassword" className="text-sm font-medium">
+                      Confirm Password
+                    </Label>
                     <Input
                       id="confirmPassword"
                       name="confirmPassword"
@@ -302,20 +346,21 @@ export function MentorProfile({ mentorInfo, onUpdate }: MentorProfileProps) {
                       value={passwordFormData.confirmPassword}
                       onChange={handlePasswordChange}
                       placeholder="Confirm new password"
-                      className="transition-smooth focus:scale-[1.01]"
+                      className="transition-all duration-300 focus:scale-[1.01] focus:shadow-md"
                       required
                     />
                   </div>
-                  <DialogFooter>
+                  <DialogFooter className="gap-2 animate-slide-up" style={{ animationDelay: "400ms" }}>
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() => setIsPasswordOpen(false)}
                       disabled={isLoading}
+                      className="transition-all hover:scale-105"
                     >
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={isLoading} className="gap-2">
+                    <Button type="submit" disabled={isLoading} className="gap-2 transition-all hover:scale-105">
                       {isLoading ? (
                         <>
                           <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
