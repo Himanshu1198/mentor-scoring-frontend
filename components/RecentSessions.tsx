@@ -688,7 +688,7 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
                       <div className="flex items-center gap-4 sm:gap-6 self-end sm:self-start">
                         <div className="flex flex-col items-end">
                           <div className={`text-2xl sm:text-3xl font-bold ${getScoreColor(session.score)}`}>
-                            {session.score}
+                            {session.metrics[4].score}
                           </div>
                           <div className="text-xs text-muted-foreground">score</div>
                         </div>

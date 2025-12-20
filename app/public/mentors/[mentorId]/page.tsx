@@ -122,24 +122,30 @@ export default function PublicMentorProfile() {
                     Back
                   </Button>
                   <CardTitle className="flex items-center gap-2 text-2xl">
-                    {profile.name}
+                    {profile.name || 'Unnamed Mentor'}
                     {profile.verified && <CheckCircle2 className="h-5 w-5 text-emerald-400" />}
                   </CardTitle>
                 </div>
                 <span className="inline-flex items-center gap-2 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-white border border-primary/30">
-                  {profile.strengthTag}
+                  {profile.strengthTag || 'data is not filled in the backend'}
                 </span>
               </div>
-              <CardDescription className="text-slate-300">{profile.bio}</CardDescription>
+              <CardDescription className="text-slate-300">
+                {profile.bio || 'data is not filled in the backend'}
+              </CardDescription>
               <div className="flex flex-wrap gap-2 pt-1">
-                {profile.peerBadges.map((badge) => (
-                  <span
-                    key={badge}
-                    className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-200 border border-emerald-400/30"
-                  >
-                    {badge}
-                  </span>
-                ))}
+                {profile.peerBadges && profile.peerBadges.length > 0 ? (
+                  profile.peerBadges.map((badge) => (
+                    <span
+                      key={badge}
+                      className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-200 border border-emerald-400/30"
+                    >
+                      {badge}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-400 italic">data is not filled in the backend</span>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -147,77 +153,96 @@ export default function PublicMentorProfile() {
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <p className="text-sm font-semibold mb-3 text-slate-200">Expertise</p>
                   <div className="flex flex-wrap gap-2">
-                    {profile.expertise.map((area) => (
-                      <span
-                        key={area}
-                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-100"
-                      >
-                        {area}
-                      </span>
-                    ))}
+                    {profile.expertise && profile.expertise.length > 0 ? (
+                      profile.expertise.map((area) => (
+                        <span
+                          key={area}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-100"
+                        >
+                          {area}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-sm text-slate-400 italic">data is not filled in the backend</span>
+                    )}
                   </div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <p className="text-sm font-semibold mb-3 text-slate-200">Avg score trend</p>
                   <div className="flex items-center gap-2 text-sm text-slate-100">
-                    {profile.avgScoreTrend.map((v, idx) => (
-                      <span key={idx} className="font-semibold">
-                        {v}
-                        {idx < profile.avgScoreTrend.length - 1 && (
-                          <span className="mx-1 text-slate-400">→</span>
-                        )}
-                      </span>
-                    ))}
+                    {profile.avgScoreTrend && profile.avgScoreTrend.length > 0 ? (
+                      profile.avgScoreTrend.map((v, idx) => (
+                        <span key={idx} className="font-semibold">
+                          {v}
+                          {idx < profile.avgScoreTrend.length - 1 && (
+                            <span className="mx-1 text-slate-400">→</span>
+                          )}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-sm text-slate-400 italic">data is not filled in the backend</span>
+                    )}
                   </div>
                 </div>
               </div>
 
               <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                 <p className="text-sm font-semibold mb-3 text-slate-200">Teaching highlights</p>
-                <ul className="list-disc list-inside space-y-2 text-sm text-slate-100">
-                  {profile.teachingHighlights.map((item, idx) => (
-                    <li key={idx}>{item}</li>
-                  ))}
-                </ul>
+                {profile.teachingHighlights && profile.teachingHighlights.length > 0 ? (
+                  <ul className="list-disc list-inside space-y-2 text-sm text-slate-100">
+                    {profile.teachingHighlights.map((item, idx) => (
+                      <li key={idx}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-slate-400 italic">data is not filled in the backend</p>
+                )}
               </div>
 
-              {profile.contact && (
+              {profile.contact ? (
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <p className="text-sm font-semibold mb-3 text-slate-200">Contact</p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {profile.contact.email && (
-                      <div className="text-sm text-slate-100 flex items-center gap-2">
-                        <span className="text-slate-400">Email:</span>
-                        <a className="text-amber-200 underline break-all" href={`mailto:${profile.contact.email}`}>
-                          {profile.contact.email}
-                        </a>
-                      </div>
-                    )}
-                    {profile.contact.phone && (
-                      <div className="text-sm text-slate-100 flex items-center gap-2">
-                        <span className="text-slate-400">Phone:</span>
-                        <span>{profile.contact.phone}</span>
-                      </div>
-                    )}
-                    {profile.contact.linkedin && (
-                      <div className="text-sm text-slate-100 flex items-center gap-2">
-                        <span className="text-slate-400">LinkedIn:</span>
-                        <a className="text-amber-200 underline break-all" href={profile.contact.linkedin} target="_blank" rel="noreferrer">
-                          Profile
-                        </a>
-                      </div>
-                    )}
-                    {profile.contact.twitter && (
-                      <div className="text-sm text-slate-100 flex items-center gap-2">
-                        <span className="text-slate-400">Twitter:</span>
-                        <a className="text-amber-200 underline break-all" href={profile.contact.twitter} target="_blank" rel="noreferrer">
-                          @{profile.contact.twitter.split('/').pop()}
-                        </a>
-                      </div>
-                    )}
-                  </div>
+                  {Object.keys(profile.contact).length > 0 ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {profile.contact.email ? (
+                        <div className="text-sm text-slate-100 flex items-center gap-2">
+                          <span className="text-slate-400">Email:</span>
+                          <a className="text-amber-200 underline break-all" href={`mailto:${profile.contact.email}`}>
+                            {profile.contact.email}
+                          </a>
+                        </div>
+                      ) : null}
+                      {profile.contact.phone ? (
+                        <div className="text-sm text-slate-100 flex items-center gap-2">
+                          <span className="text-slate-400">Phone:</span>
+                          <span>{profile.contact.phone}</span>
+                        </div>
+                      ) : null}
+                      {profile.contact.linkedin ? (
+                        <div className="text-sm text-slate-100 flex items-center gap-2">
+                          <span className="text-slate-400">LinkedIn:</span>
+                          <a className="text-amber-200 underline break-all" href={profile.contact.linkedin} target="_blank" rel="noreferrer">
+                            Profile
+                          </a>
+                        </div>
+                      ) : null}
+                      {profile.contact.twitter ? (
+                        <div className="text-sm text-slate-100 flex items-center gap-2">
+                          <span className="text-slate-400">Twitter:</span>
+                          <a className="text-amber-200 underline break-all" href={profile.contact.twitter} target="_blank" rel="noreferrer">
+                            @{profile.contact.twitter.split('/').pop()}
+                          </a>
+                        </div>
+                      ) : null}
+                      {!profile.contact.email && !profile.contact.phone && !profile.contact.linkedin && !profile.contact.twitter && (
+                        <p className="text-sm text-slate-400 italic col-span-2">data is not filled in the backend</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400 italic">data is not filled in the backend</p>
+                  )}
                 </div>
-              )}
+              ) : null}
             </CardContent>
           </Card>
         ) : null}
