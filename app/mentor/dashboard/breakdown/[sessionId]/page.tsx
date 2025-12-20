@@ -503,70 +503,103 @@ Provide exactly 3 specific changes made.`,
   }
 
   // Video player controls
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
+useEffect(() => {
+  const video = videoRef.current
+  if (!video) return
 
-    const updateTime = () => {
+  let animationFrameId: number
+
+  const updateTime = () => {
+    // Use requestAnimationFrame for smoother updates
+    animationFrameId = requestAnimationFrame(() => {
       setCurrentTime(video.currentTime)
-    }
+    })
+  }
 
-    const updateDuration = () => {
+  const updateDuration = () => {
+    if (video.duration && !isNaN(video.duration)) {
       setDuration(video.duration)
     }
+  }
 
-    video.addEventListener("timeupdate", updateTime)
-    video.addEventListener("loadedmetadata", updateDuration)
-    video.addEventListener("ended", () => setIsPlaying(false))
+  const handleEnded = () => {
+    setIsPlaying(false)
+  }
 
-    return () => {
-      video.removeEventListener("timeupdate", updateTime)
-      video.removeEventListener("loadedmetadata", updateDuration)
-      video.removeEventListener("ended", () => setIsPlaying(false))
+  const handlePlay = () => {
+    setIsPlaying(true)
+  }
+
+  const handlePause = () => {
+    setIsPlaying(false)
+  }
+
+  video.addEventListener("timeupdate", updateTime)
+  video.addEventListener("loadedmetadata", updateDuration)
+  video.addEventListener("durationchange", updateDuration)
+  video.addEventListener("ended", handleEnded)
+  video.addEventListener("play", handlePlay)
+  video.addEventListener("pause", handlePause)
+
+  // Initial duration set
+  if (video.readyState >= 1) {
+    updateDuration()
+  }
+
+  return () => {
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId)
     }
-  }, [])
+    video.removeEventListener("timeupdate", updateTime)
+    video.removeEventListener("loadedmetadata", updateDuration)
+    video.removeEventListener("durationchange", updateDuration)
+    video.removeEventListener("ended", handleEnded)
+    video.removeEventListener("play", handlePlay)
+    video.removeEventListener("pause", handlePause)
+  }
+}, [])
 
-  // Track current transcript segment and auto-scroll
-  useEffect(() => {
-    if (!breakdown || !isPlaying) return
+    // Track current transcript segment and auto-scroll
+useEffect(() => {
+  if (!breakdown?.timeline?.transcript?.length || !transcriptRef.current) return
 
-    const currentSegmentIndex = breakdown.timeline.transcript.findIndex(
-      (segment) => currentTime >= segment.startTime && currentTime <= segment.endTime,
+  const findCurrentSegment = () => {
+    return breakdown.timeline.transcript.findIndex(
+      (segment) => currentTime >= segment.startTime && currentTime < segment.endTime,
     )
+  }
 
-    if (currentSegmentIndex !== -1) {
-      const prevIndex = currentTranscriptIndex
-      setCurrentTranscriptIndex(currentSegmentIndex)
+  const newIndex = findCurrentSegment()
 
-      // Auto-scroll to current segment only if it changed and video is playing
-      if (prevIndex !== currentSegmentIndex && transcriptRef.current) {
-        const container = transcriptRef.current
-        const segmentElement = container.children[currentSegmentIndex] as HTMLElement
+  // Only update if the index actually changed
+  if (newIndex !== currentTranscriptIndex) {
+    setCurrentTranscriptIndex(newIndex)
 
-        if (segmentElement && container) {
-          // Calculate scroll position within the container only
+    // Auto-scroll when playing and we have a valid segment
+    if (newIndex !== -1 && isPlaying) {
+      const container = transcriptRef.current
+      const segmentElement = container.children[newIndex] as HTMLElement
+
+      if (segmentElement) {
+        setTimeout(() => {
           const containerRect = container.getBoundingClientRect()
           const elementRect = segmentElement.getBoundingClientRect()
-
-          // Calculate the position relative to the container
           const elementTop = elementRect.top - containerRect.top + container.scrollTop
-          const elementHeight = elementRect.height
           const containerHeight = container.clientHeight
-
-          // Center the element in the container
+          const elementHeight = elementRect.height
           const scrollPosition = elementTop - containerHeight / 2 + elementHeight / 2
 
-          // Smooth scroll within the container only
           container.scrollTo({
-            top: scrollPosition,
+            top: Math.max(0, scrollPosition),
             behavior: "smooth",
           })
-        }
+        }, 50)
       }
     }
-  }, [currentTime, breakdown, isPlaying, currentTranscriptIndex])
+  }
+}, [currentTime, isPlaying, breakdown?.timeline?.transcript, currentTranscriptIndex])
 
-  const togglePlayPause = () => {
+const togglePlayPause = () => {
     const video = videoRef.current
     if (!video) return
 
@@ -584,6 +617,7 @@ Provide exactly 3 specific changes made.`,
 
     const newTime = Number.parseFloat(e.target.value)
     video.currentTime = newTime
+    // Immediately update state
     setCurrentTime(newTime)
   }
 
@@ -902,8 +936,17 @@ Provide exactly 3 specific changes made.`,
                       className="w-full h-full object-contain"
                       preload="metadata"
                       crossOrigin="anonymous"
-                      controls={false}
                       playsInline
+                      onTimeUpdate={() => {
+                        if (videoRef.current) {
+                          setCurrentTime(videoRef.current.currentTime)
+                        }
+                      }}
+                      onLoadedMetadata={() => {
+                        if (videoRef.current && videoRef.current.duration) {
+                          setDuration(videoRef.current.duration)
+                        }
+                      }}
                     >
                       <source src={breakdown.videoUrl} type="video/mp4" />
                     </video>
@@ -929,15 +972,18 @@ Provide exactly 3 specific changes made.`,
                       <div className="relative h-2 bg-muted rounded-full overflow-hidden group cursor-pointer">
                         <div
                           className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary via-primary to-primary/80 transition-all duration-150 rounded-full pointer-events-none"
-                          style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                          style={{ 
+                            width: `${duration > 0 && currentTime >= 0 ? (currentTime / duration) * 100 : 0}%`,
+                            transition: 'width 0.1s linear'
+                          }}
                         />
                         <input
                           type="range"
                           min="0"
-                          max={duration || 0}
+                          max={duration || 100}
                           value={currentTime || 0}
                           onChange={handleSeek}
-                          step="0.1"
+                          step="0.01"
                           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                         />
                       </div>

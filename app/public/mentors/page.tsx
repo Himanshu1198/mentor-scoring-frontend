@@ -91,7 +91,7 @@ export default function PublicMentorDashboard() {
   const filteredBySearch = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return rankings;
-    return rankings.filter((row) => row.name.toLowerCase().includes(term));
+    return rankings.filter((row) => (row.name || '').toLowerCase().includes(term));
   }, [rankings, search]);
 
   return (
@@ -272,23 +272,25 @@ export default function PublicMentorDashboard() {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
                               <Trophy className="h-4 w-4 text-amber-400 flex-shrink-0" />
-                              <span className="font-semibold text-amber-300">{row.rank}</span>
+                              <span className="font-semibold text-amber-300">{row.rank || 'N/A'}</span>
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium text-slate-50">{row.name}</span>
+                              <span className="font-medium text-slate-50">{row.name || 'data is not filled in the backend'}</span>
                               {row.verified && (
                                 <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
                               )}
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <span className="font-semibold text-slate-100">{row.overallScore}</span>
+                            <span className="font-semibold text-slate-100">
+                              {row.overallScore !== undefined ? row.overallScore : 'data is not filled in the backend'}
+                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <span className="inline-flex items-center rounded-md bg-primary/20 px-3 py-1 text-xs font-medium text-white border border-primary/30">
-                              {row.strengthTag}
+                              {row.strengthTag || 'data is not filled in the backend'}
                             </span>
                           </td>
                         </tr>
