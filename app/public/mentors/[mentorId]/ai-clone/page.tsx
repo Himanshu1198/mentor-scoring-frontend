@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AUDIO_GENERATION_URL, API_BASE_URL, API_ENDPOINTS } from '@/config/api';
 
-const generateAudio = 'http://26.228.167.86:8000/expand-topic-and-generate-audio';
+const generateAudio = process.env.NEXT_PUBLIC_AUDIO_GENERATION_URL || AUDIO_GENERATION_URL;
 
 export default function MentorAIClonePage() {
   const params = useParams();

@@ -22,7 +22,7 @@ export function StudentNavbar() {
   const navItems = [
     { label: "Profile", href: "/student", icon: User },
     { label: "Explore", href: "/student/explore", icon: Search },
-    { label: "Leaderboard", href: "/student/leaderboard", icon: Trophy },
+    // { label: "Leaderboard", href: "/student/leaderboard", icon: Trophy },
   ];
 
   const isActive = (href: string) => {
@@ -30,7 +30,7 @@ export function StudentNavbar() {
   };
 
   return (
-    <nav className="sticky top-0 z-40 w-full border-b border-white/10 bg-slate-950/95 backdrop-blur">
+    <nav className="sticky top-0 z-40 w-full border-b border-white/10 bg-slate-950/95">
       <div className="container mx-auto px-4 sm:px-6 lg:px-10">
         <div className="flex h-16 items-center justify-between">
           {/* Logo/Brand */}
