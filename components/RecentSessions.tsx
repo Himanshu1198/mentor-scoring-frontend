@@ -23,6 +23,7 @@ import axios from "axios"
 // S3 Upload Service URL
 const S3_SERVICE_URL = 'http://localhost:3000/api'
 const uploadAudioReference = 'http://26.228.167.86:8000/upload-video-from-s3'
+const topicsVideoURL = 'http://localhost:8000/api/v1/analyze-topic-relevance'
 
 interface WeakMoment {
   timestamp: string
@@ -325,6 +326,27 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
       }
 
       console.log("✅ New session created:", newSession)
+
+      // Store MongoDB sessionId mapping for later lookup
+      // This maps any possible URL sessionId to the actual MongoDB ID
+      const mongoSessionId = newSession.id
+      localStorage.setItem(`mongo_id_map`, JSON.stringify({
+        ...JSON.parse(localStorage.getItem(`mongo_id_map`) || '{}'),
+        [mongoSessionId]: mongoSessionId
+      }))
+      console.log(`✅ Stored MongoDB sessionId mapping: ${mongoSessionId}`)
+
+      // Store videoId in localStorage with MongoDB sessionId key
+      if (videoId) {
+        localStorage.setItem(`video_id_${mongoSessionId}`, videoId)
+        console.log(`✅ Stored videoId in localStorage: video_id_${mongoSessionId}`)
+      }
+
+      // Store analysis results in localStorage with MongoDB sessionId key
+      if (analysisResults) {
+        localStorage.setItem(`chunk_analysis_${mongoSessionId}`, JSON.stringify(analysisResults))
+        console.log(`✅ Stored analysis results in localStorage: chunk_analysis_${mongoSessionId}`)
+      }
 
       setSessionList((prev) => [newSession, ...prev])
       setShowCreateForm(false)
@@ -688,7 +710,7 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
                       <div className="flex items-center gap-4 sm:gap-6 self-end sm:self-start">
                         <div className="flex flex-col items-end">
                           <div className={`text-2xl sm:text-3xl font-bold ${getScoreColor(session.score)}`}>
-                            {session.metrics[4].score}
+                            {session.metrics[4].score || ""}
                           </div>
                           <div className="text-xs text-muted-foreground">score</div>
                         </div>
