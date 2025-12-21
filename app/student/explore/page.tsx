@@ -178,14 +178,15 @@ export default function ExplorePage() {
 
     // Apply search filter
     content = content.filter((item: Mentor | VideoContent) => {
-      const searchableText =
-        contentType === "mentors"
-          ? `${item.name} ${(item as Mentor).subject} ${
-              (item as Mentor).strengthTag
-            }`.toLowerCase()
-          : `${(item as VideoContent).title} ${(item as VideoContent).mentor} ${
-              (item as VideoContent).subject
-            }`.toLowerCase();
+      let searchableText = "";
+      
+      if (contentType === "mentors") {
+        const mentor = item as Mentor;
+        searchableText = `${mentor.name} ${mentor.subject} ${mentor.strengthTag}`.toLowerCase();
+      } else {
+        const video = item as VideoContent;
+        searchableText = `${video.title} ${video.mentor} ${video.subject}`.toLowerCase();
+      }
 
       return searchableText.includes(searchTerm);
     });

@@ -26,6 +26,7 @@ export const API_ENDPOINTS = {
     breakdown: (mentorId: string, sessionId: string) => `/api/mentor/${mentorId}/sessions/${sessionId}/breakdown`,
     video: (mentorId: string, sessionId: string) => `/api/mentor/${mentorId}/sessions/${sessionId}/video`,
     analyzeSession: (mentorId: string) => `/api/mentor/${mentorId}/sessions/analyze`,
+    deleteSession: (mentorId: string, sessionId: string) => `/api/mentor/${mentorId}/sessions/${sessionId}/delete`,
   },
   students: {
     profile: '/api/students/profile',

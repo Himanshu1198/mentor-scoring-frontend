@@ -127,7 +127,7 @@ export default function StudentProfilePage() {
       {/* Profile Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Basic Info Card */}
-        <Card className="border-white/10 bg-white/5 backdrop-blur">
+        <Card className="border-white/10 bg-white/5">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium text-slate-200">
@@ -142,7 +142,7 @@ export default function StudentProfilePage() {
         </Card>
 
         {/* Rank Card */}
-        <Card className="border-white/10 bg-white/5 backdrop-blur">
+        <Card className="border-white/10 bg-white/5">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium text-slate-200">
@@ -160,7 +160,7 @@ export default function StudentProfilePage() {
         </Card>
 
         {/* Sessions Card */}
-        <Card className="border-white/10 bg-white/5 backdrop-blur">
+        <Card className="border-white/10 bg-white/5">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium text-slate-200">
@@ -178,7 +178,7 @@ export default function StudentProfilePage() {
         </Card>
 
         {/* Average Score Card */}
-        <Card className="border-white/10 bg-white/5 backdrop-blur">
+        <Card className="border-white/10 bg-white/5">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium text-slate-200">
@@ -199,7 +199,7 @@ export default function StudentProfilePage() {
       {/* Details Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Account Details */}
-        <Card className="border-white/10 bg-white/5 backdrop-blur lg:col-span-2">
+        <Card className="border-white/10 bg-white/5 lg:col-span-2">
           <CardHeader>
             <div className="flex items-center gap-2">
               <User className="h-5 w-5 text-blue-400" />
@@ -242,7 +242,7 @@ export default function StudentProfilePage() {
         </Card>
 
         {/* Quick Stats */}
-        <Card className="border-white/10 bg-white/5 backdrop-blur">
+        <Card className="border-white/10 bg-white/5">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-emerald-400" />
@@ -278,7 +278,7 @@ export default function StudentProfilePage() {
       </div>
 
       {/* Recent Activity */}
-      <Card className="border-white/10 bg-white/5 backdrop-blur">
+      <Card className="border-white/10 bg-white/5">
         <CardHeader>
           <CardTitle>Recent Activity</CardTitle>
           <CardDescription>Your latest interactions</CardDescription>

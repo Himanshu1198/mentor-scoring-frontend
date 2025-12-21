@@ -29,6 +29,14 @@ interface WeakMoment {
   message: string
 }
 
+interface Metric {
+  name: string
+  score: number
+  confidenceInterval?: [number, number]
+  whatHelped?: string[]
+  whatHurt?: string[]
+}
+
 interface Session {
   id: string
   sessionName: string
@@ -37,6 +45,7 @@ interface Session {
   weakMoments: WeakMoment[]
   studentCount: number
   uploadedFile?: string
+  metrics?: Metric[]
 }
 
 interface RecentSessionsProps {
@@ -57,6 +66,8 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadStatus, setUploadStatus] = useState("")
   const [sortBy, setSortBy] = useState("date")
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const formatDate = (dateString: string | undefined) => {
@@ -126,6 +137,36 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
       case "date":
       default:
         return sorted.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    }
+  }
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!window.confirm("Are you sure you want to delete this session? This action cannot be undone.")) {
+      return
+    }
+
+    try {
+      setDeleteLoading(true)
+      const BACKEND_API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000"
+      
+      await axios.post(
+        `${BACKEND_API_URL}/api/mentor/${user?.id}/sessions/${sessionId}/delete`,
+        {},
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+
+      // Remove from sessionList
+      setSessionList((prev) => prev.filter((s) => s.id !== sessionId))
+      setDeletingSessionId(null)
+    } catch (error: any) {
+      console.error("❌ Error deleting session:", error)
+      alert(error?.message || "Failed to delete session")
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -355,9 +396,11 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
     const matchesSearch =
       term.length === 0 ||
       session.sessionName.toLowerCase().includes(term) ||
-      session.weakMoments.some((moment) => moment.message.toLowerCase().includes(term))
+      session.weakMoments?.some((moment) => moment.message.toLowerCase().includes(term))
 
-    const matchesScore = scoreFilter === "all" ? true : session.score >= Number(scoreFilter)
+    // Use metrics[4].score if available, otherwise use session.score
+    const sessionScore = session.metrics?.[4]?.score || session.score || 0
+    const matchesScore = scoreFilter === "all" ? true : sessionScore >= Number(scoreFilter)
 
     return (
       matchesSearch && matchesScore && matchesDateFilter(session.date) && matchesStudentFilter(session.studentCount)
@@ -687,8 +730,8 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
 
                       <div className="flex items-center gap-4 sm:gap-6 self-end sm:self-start">
                         <div className="flex flex-col items-end">
-                          <div className={`text-2xl sm:text-3xl font-bold ${getScoreColor(session.score)}`}>
-                            {session.metrics[4].score}
+                          <div className={`text-2xl sm:text-3xl font-bold ${getScoreColor(session.metrics?.[4]?.score || session.score)}`}>
+                            {session.metrics?.[4]?.score || session.score}
                           </div>
                           <div className="text-xs text-muted-foreground">score</div>
                         </div>
@@ -707,6 +750,23 @@ export function RecentSessions({ sessions, onViewBreakdown }: RecentSessionsProp
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
                           <span className="hidden sm:inline">Breakdown</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteSession(session.id)}
+                          disabled={deleteLoading && deletingSessionId === session.id}
+                          className="transition-smooth hover:scale-[1.02] hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900 dark:hover:text-red-300 text-red-600 dark:text-red-400"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          <span className="hidden sm:inline">Delete</span>
                         </Button>
                       </div>
                     </div>

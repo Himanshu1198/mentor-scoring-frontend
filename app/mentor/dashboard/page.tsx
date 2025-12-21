@@ -119,7 +119,7 @@ function MentorDashboardContent() {
     return (
       <div className="min-h-screen bg-background">
         <MentorNavbar />
-        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-screen-xl mx-auto px-4 py-6">
           <div className="text-center py-20 animate-fadeIn">
             <div className="relative inline-flex items-center justify-center">
               <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl animate-pulse" />
@@ -141,9 +141,9 @@ function MentorDashboardContent() {
     return (
       <div className="min-h-screen bg-background">
         <MentorNavbar />
-        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-screen-xl mx-auto px-4 py-6">
           <div className="max-w-md mx-auto mt-20 animate-slideUp">
-            <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-6 backdrop-blur-sm">
+            <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 backdrop-blur-sm">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 w-10 h-10 rounded-full bg-destructive/20 flex items-center justify-center">
                   <svg className="w-5 h-5 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -184,9 +184,9 @@ function MentorDashboardContent() {
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl animate-pulse [animation-delay:1s]" />
       </div>
 
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-7xl">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full animate-fadeIn">
-          <TabsList className="grid w-full grid-cols-4 mb-6 h-11 bg-muted/50 backdrop-blur-sm p-1 shadow-sm">
+      <main className="max-w-screen-xl mx-auto px-4 py-6 animate-fadeIn">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-4 mb-4 h-11 bg-muted/50 backdrop-blur-sm p-1 shadow-sm">
             <TabsTrigger
               value="profile"
               className="text-sm font-medium transition-all duration-200 data-[state=active]:shadow-md"
@@ -213,7 +213,7 @@ function MentorDashboardContent() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="profile" className="space-y-6 mt-0">
+          <TabsContent value="profile" className="space-y-4 mt-0">
             <div className="space-y-1 animate-slideIn">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -226,7 +226,7 @@ function MentorDashboardContent() {
 
             {snapshot && (
               <section className="animate-stagger-1">
-                <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
+                <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
                   <span className="h-1 w-8 bg-primary rounded-full" />
                   Performance Overview
                 </h3>
@@ -242,7 +242,7 @@ function MentorDashboardContent() {
 
             {mentorInfo && (
               <section className="animate-stagger-2">
-                <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
+                <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
                   <span className="h-1 w-8 bg-primary rounded-full" />
                   Profile Information
                 </h3>
@@ -265,7 +265,7 @@ function MentorDashboardContent() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={1.5}
-                      d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 00-.707.293h-3.172a1 1 0 00-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+                      d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
                     />
                   </svg>
                 </div>
@@ -274,7 +274,7 @@ function MentorDashboardContent() {
             )}
           </TabsContent>
 
-          <TabsContent value="skills" className="space-y-6 mt-0">
+          <TabsContent value="skills" className="space-y-4 mt-0">
             <div className="space-y-1 animate-slideIn">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -294,7 +294,7 @@ function MentorDashboardContent() {
 
             {skills.length > 0 ? (
               <>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-stagger-1">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-stagger-1">
                   <div className="card-hover">
                     <SkillRadarChart skills={skills} />
                   </div>
@@ -328,7 +328,7 @@ function MentorDashboardContent() {
             )}
           </TabsContent>
 
-          <TabsContent value="sessions" className="space-y-6 mt-0">
+          <TabsContent value="sessions" className="space-y-4 mt-0">
             <div className="space-y-1 animate-slideIn">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -372,7 +372,7 @@ function MentorDashboardContent() {
             )}
           </TabsContent>
 
-          <TabsContent value="rankings" className="space-y-6 mt-0">
+          <TabsContent value="rankings" className="space-y-4 mt-0">
             <div className="space-y-1 animate-slideIn">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
